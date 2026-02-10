@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "fluxstate"
+version = "0.1.0"
+description = ""
+authors = ["gyasis <gyasis@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+polars = "^1.5.0"
+orjson = "^3.10.7"
+numpy = "^2.1.0"
+pyarrow = "^17.0.0"
+humanize = "^4.10.0"
+tqdm = "^4.66.5"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

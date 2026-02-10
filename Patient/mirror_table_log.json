@@ -1,0 +1,15 @@
+{
+    "initialization": true,
+    "runs": [
+        {
+            "status": "initialization_successful",
+            "timestamp": "2023-10-01T12:00:00",
+            "runtime": "0s"
+        },
+        {
+            "status": "comparison_successful",
+            "timestamp": "2023-10-02T14:30:00",
+            "runtime": "5m 30s"
+        }
+    ]
+}

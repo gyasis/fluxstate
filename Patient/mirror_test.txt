@@ -1,0 +1,24 @@
+Script started on 2024-08-30 07:00:31-04:00 [TERM="xterm-256color" TTY="/dev/pts/23" COLUMNS="188" LINES="21"]
+[?2004h(base) ]0;gyasis@gyasis-Blade-15-Base-Model-Early-2020-RZ09-0328: ~/Documents/code/Herself/tools/CDC/working/Patient[01;32mgyasis@gyasis-Blade-15-Base-Model-Early-2020-RZ09-0328[00m:[01;34m~/Documents/code/Herself/tools/CDC/working/Patient[00m$ sudo dpkg -i zoom_amd64.deb[15Pcd Downloadspython main.py[6Pfprompt python main.py[2Pcd Downloadspython main.py[2Pcd Downloads[K[K[K[K[K[K[K[K[K[K[K[Kpython patietn[K[Knt_capture.py[K[K[K)[K_2.py
+[?2004lTraceback (most recent call last):
+  File "/home/gyasis/Documents/code/Herself/tools/CDC/working/Patient/patient_capture_2.py", line 3, in <module>
+    import polars as pl
+ModuleNotFoundError: No module named 'polars'
+[?2004h(base) ]0;gyasis@gyasis-Blade-15-Base-Model-Early-2020-RZ09-0328: ~/Documents/code/Herself/tools/CDC/working/Patient[01;32mgyasis@gyasis-Blade-15-Base-Model-Early-2020-RZ09-0328[00m:[01;34m~/Documents/code/Herself/tools/CDC/working/Patient[00m$ condact[K[K[K[K[K[K[Kconda activate deeplake
+[?2004l[?2004h(deeplake) ]0;gyasis@gyasis-Blade-15-Base-Model-Early-2020-RZ09-0328: ~/Documents/code/Herself/tools/CDC/working/Patient[01;32mgyasis@gyasis-Blade-15-Base-Model-Early-2020-RZ09-0328[00m:[01;34m~/Documents/code/Herself/tools/CDC/working/Patient[00m$ tree
+[?2004l[01;34m.[0m
+├── mirror_test.txt
+├── patient_capture_2.py
+├── patient_capture.py
+├── Proposal.html
+├── [01;35mProposal.jpeg[0m
+├── Proposal.md
+├── Proposal.pdf
+├── [01;35mProposal.png[0m
+└── update_checker.py
+
+0 directories, 9 files
+[?2004h(deeplake) ]0;gyasis@gyasis-Blade-15-Base-Model-Early-2020-RZ09-0328: ~/Documents/code/Herself/tools/CDC/working/Patient[01;32mgyasis@gyasis-Blade-15-Base-Model-Early-2020-RZ09-0328[00m:[01;34m~/Documents/code/Herself/tools/CDC/working/Patient[00m$ exit
+[?2004lexit
+
+Script done on 2024-08-30 07:02:12-04:00 [COMMAND_EXIT_CODE="0"]
