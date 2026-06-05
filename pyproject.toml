@@ -20,6 +20,10 @@ pydantic = "^2.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0"
+# Test-only: proves the .flux/ store is glob-readable by an external engine
+# (STORE-3 / SC-007). NOT a runtime dependency — the runtime stays Polars + PyArrow.
+duckdb = "^1.0"
+pytz = "*"  # test-only: DuckDB needs it to read tz-aware timestamp parquet columns
 
 
 [build-system]

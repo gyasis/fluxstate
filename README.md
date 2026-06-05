@@ -6,19 +6,29 @@ FluxState is a Python library that tracks every cell-level change in database ta
 
 ## Core Concept
 
-Unlike traditional CDC that just captures changes, FluxState maintains a temporal mirror where every cell contains its entire history:
+FluxState stores history as an **append-only change-log** in a lightweight
+`<name>.flux/` folder. Each `update_mirror_table()` captures one snapshot by
+diffing it against the prior state and appending **one immutable Parquet file of
+only the changed cells** — no full-table rewrite, no per-cell JSON blobs. Any
+historical state is *reconstructed* on read, with values restored to their
+original types.
 
-```python
-# Standard table
-PATIENT_ID | STATUS
-123        | "active"
+```text
+<name>.flux/
+├── manifest.json          # authoritative: schema + valid event files + per-file ts range
+└── events/
+    ├── 20260605T000000Z.parquet   # one capture's change events (immutable)
+    └── 20260606T000000Z.parquet   # append = a NEW file; existing files never rewritten
+```
 
-# FluxState mirror table
-PATIENT_ID | STATUS
-123        | [
-              {"date": "2024-01-01 10:00:00", "value": "pending"},
-              {"date": "2024-02-15 14:30:00", "value": "active"}
-            ]
+Each change event is a row `(entity_id, timestamp, field, value, dtype, snapshot_id)`.
+A deletion is a single `__deleted__` marker row (not one null per column), so a
+record that is deleted and later re-inserted keeps **one continuous timeline**.
+
+The store is plain Parquet — **glob-readable by any engine** with no FluxState code:
+
+```sql
+SELECT * FROM '<name>.flux/events/*.parquet';   -- DuckDB / DuckDB-WASM / Polars
 ```
 
 ## Why FluxState?
@@ -31,51 +41,66 @@ PATIENT_ID | STATUS
 
 ## Features
 
-- ✅ **Cell-level change tracking** with microsecond precision
-- ✅ **Polars-based** for 10-100x performance vs Pandas
-- ✅ **Pydantic validation** for runtime data integrity
-- ✅ **Parquet serialization** for efficient storage
-- ✅ **Snowpark integration** for production Snowflake pipelines
-- ✅ **Time-travel queries** to reconstruct historical states
-- ✅ **Three initialization modes**: init, compare, load
+- ✅ **Append-only change-log** — each capture appends one immutable Parquet file of only the changed cells
+- ✅ **Idempotent capture** — re-capturing the same snapshot is a no-op
+- ✅ **Time-travel reconstruction** with **type fidelity** — values restored to their original dtypes (not string-cast)
+- ✅ **Delete + resurrection continuity** — one continuous timeline per `entity_id`
+- ✅ **Glob-readable store** — plain Parquet; queryable by DuckDB / Polars with no FluxState code (no Delta/Iceberg)
+- ✅ **Wide-table safe** — row-hash-prefiltered keyed diff stays O(changed rows)
+- ✅ **Multi-format output** — Polars / Arrow (zero-copy) / Parquet / CSV
+- ✅ **Lightweight** — Polars + PyArrow only; no heavy runtime dependency
 
 ## Quick Start
 
 ```python
+import polars as pl
 from fluxstate import FluxState
 
-# Initialize new mirror from table
-fs = FluxState(
-    table=patient_df,
-    key_column="PATIENT_ID",
-    mode="init"
-)
+# Day 1: first snapshot → writes <name>.flux/events/<ts>.parquet + manifest.json
+t1 = pl.DataFrame({"id": [1, 2, 3], "risk": [0.4, 0.7, 0.2], "status": ["A", "A", "B"]})
+fs = FluxState(t1, key_column="id", store_path="patients.flux")
+fs.update_mirror_table()
 
-# Serialize to Parquet
-mirror_df = fs.serialize_mirror_table()
-mirror_df.write_parquet("patient_mirror.parquet")
+# Day 2: one cell changes; row 3 disappears (logged as a __deleted__ marker)
+t2 = pl.DataFrame({"id": [1, 2], "risk": [0.4, 0.9], "status": ["A", "A"]})
+fs = FluxState(t2, key_column="id", store_path="patients.flux")
+fs.update_mirror_table()      # appends ONE new events file
+fs.update_mirror_table()      # idempotent re-run → adds nothing
 
-# Later: Load and detect changes
-fs_updated = FluxState(
-    table=updated_patient_df,
-    key_column="PATIENT_ID",
-    mode="compare",
-    expect_serialized=True,
-    mirror_path="patient_mirror.parquet"
-)
-
-changes = fs_updated.update_mirror_table()
-print(f"Detected {len(changes)} cell changes")
+# Reconstruct, time-travel, inspect history (values come back typed)
+current   = fs.save_mirror_table(output_format="polars")   # pl.DataFrame (or "arrow"/"parquet"/"csv")
+as_of_day1 = fs.travel("2026-06-05T00:00:00Z")             # state as of a past point
+timeline   = fs.get_timeline(entity_id=2, field="risk")    # [{date, value}, …]
+state      = fs.row_state(entity_id=3, T="now")            # {"state": ..., "resurrected": ...}
 ```
+
+## Change-Log API
+
+| Method | Behavior |
+|---|---|
+| `update_mirror_table(captured_at=None)` | Capture the current snapshot: keyed join-diff vs prior state → append one immutable events file (idempotent). |
+| `save_mirror_table(output_path_parquet=None, csv_path=None, *, output_format=None)` | Reconstructed current view. `output_format` ∈ `polars` / `arrow` / `parquet` / `csv`; legacy positional paths still write files. |
+| `travel(date)` | Reconstructed table state **as of** `date` (UTC); before any history → empty (not an error). |
+| `query_historical_value(query_date)` | `{entity_id: {column: value}}` as of `query_date`, values restored to original dtype. |
+| `get_timeline(entity_id, field=None)` | Per-cell timeline `[{date, value}]`, typed. |
+| `row_state(entity_id, T="now")` | `{state: active\|deleted\|unborn, resurrected: bool}` for the lifecycle chain. |
+| `change_count(entity_id)` | Number of change events recorded for an entity. |
+
+The reconstruction primitives also exist as module functions in `reconstruct.py`
+(`as_of`, `get_timeline`, `row_state`, `build_mirror_view`, …) taking a
+`ChangeLogStore` explicitly.
 
 ## Tech Stack
 
-- **Python 3.11+**
-- **Polars** - Lightning-fast dataframes
-- **orjson** - High-performance JSON serialization
-- **PyArrow/Parquet** - Columnar storage
-- **Pydantic** - Runtime validation
-- **Snowpark** - Snowflake integration (optional)
+- **Python 3.10+**
+- **Polars** - Lightning-fast dataframes (the change-detection + reconstruction engine)
+- **PyArrow/Parquet** - Columnar, glob-readable storage
+- **orjson / numpy / humanize / tqdm** - supporting utilities
+- **Pydantic** - Runtime validation (mirror validator)
+- **DuckDB** - test-only, proves the `.flux/` store is glob-readable
+
+> No heavy runtime dependency (no Delta/Iceberg). Snowpark is **not** required —
+> the test suite runs hermetically on in-memory `pl.DataFrame`s.
 
 ## Installation
 
@@ -124,9 +149,11 @@ cost_metrics = analyze_compute_usage(changes)  # Custom analysis
 
 ```
 fluxstate/
-├── fluxstate.py              # Main FluxState class
+├── fluxstate.py              # FluxState facade (capture + reconstruction wiring)
+├── changelog.py              # ChangeLogStore: dtype codec, keyed diff, atomic append, manifest
+├── reconstruct.py            # reads: as_of / get_timeline / row_state / build_mirror_view
 ├── mirror_validator.py       # Pydantic validation schemas
-├── example.py                # Snowpark/Elation integration example
+├── example.py                # Snowpark/Elation integration example (legacy)
 ├── test_fluxstate_validator.py
 ├── Patient/                  # Production implementations
 │   ├── Proposal.md          # Snowflake warehouse strategy
@@ -140,6 +167,10 @@ fluxstate/
 ```
 
 ## Documentation
+
+- **[`docs/API.md`](docs/API.md)** — full API reference + usage guide for the change-log
+  system (`FluxState`, `ChangeLogStore`, `reconstruct`), the `.flux/` store layout, the
+  manifest, dtype tags, migration notes, and guarantees. Every example is runnable.
 
 See `memory-bank/` for comprehensive project documentation:
 - **projectbrief.md** - Core concepts and architecture
