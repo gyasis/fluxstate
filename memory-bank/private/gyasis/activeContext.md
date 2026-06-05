@@ -1,29 +1,29 @@
 # Active Context
 
-**Last Updated**: 2026-06-05 18:35:53
+**Last Updated**: 2026-06-05 18:49:14
 
 ## Current Focus
-fix: track manifest.schema.json contract excluded by .gitignore *.json
+chore(gitignore): one consistent policy for dot-folders
 
-The blanket `*.json` data-file ignore was silently excluding the store
-manifest JSON-schema contract — a spec deliverable referenced by the code,
-docs/API.md, changelog-store.md, plan.md and tasks.md. Add a `!specs/**/*.json`
-negation so spec contracts/schemas stay tracked, and commit the schema.
+Spec deliverables are tracked, agent runtime is ignored:
+- track `.specify/**/*.json` (SpecKit spec definition — feature/config; its
+  templates + constitution were already tracked, only its JSON was excluded by
+  the `*.json` blanket rule)
+- explicitly ignore agent runtime state: `.devkid/`, `.dk/`, `execution_plan.json`
+  (generated, machine-local; source config is the tracked dev-kid.yml / .specify/)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ## Recent Changes
 ```
- .claude/activity_stream.md                  | 12 +++++++
- .claude/watchdog.pid                        |  1 -
- memory-bank/private/gyasis/activeContext.md | 46 ++++++------------------
+ .claude/activity_stream.md                  | 12 ++++++++++++
+ memory-bank/private/gyasis/activeContext.md | 23 ++++++++++-------------
  memory-bank/private/gyasis/progress.md      |  2 +-
- 4 files changed, 23 insertions(+), 38 deletions(-)
+ 3 files changed, 23 insertions(+), 14 deletions(-)
 ```
 
 ## Modified Files
 .claude/activity_stream.md
-.claude/watchdog.pid
 memory-bank/private/gyasis/activeContext.md
 memory-bank/private/gyasis/progress.md
 
