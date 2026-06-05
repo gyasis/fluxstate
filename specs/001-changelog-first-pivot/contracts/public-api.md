@@ -19,16 +19,27 @@ prefiltered) vs prior state → append one `events/<ts>.parquet` → commit mani
 full-table rewrite. Idempotent on re-capture of the same snapshot.
 - **Post-condition**: exactly one new events file when ≥1 change; zero new files when nothing changed or snapshot already recorded.
 
-### `save_mirror_table(output_path_parquet=None, csv_path=None, *, output_format="polars")`
+### `save_mirror_table(output_path_parquet=None, csv_path=None, *, output_format=None)`
 **Additive `output_format` keyword.** Returns/writes the reconstructed mirror view.
-| `output_format` | Result |
+
+**Precedence rule (resolves the back-compat vs default conflict — I1):** `output_format`
+defaults to `None`, NOT `"polars"`. Resolution order:
+1. If `output_format` is **explicitly** passed → honor it exactly (table below).
+2. Else if `output_path_parquet` is given (and no `output_format`) → **write parquet** (legacy behavior).
+3. Else if `csv_path` is given (and no `output_format`) → **write CSV** (legacy behavior).
+4. Else (no path, no format) → return a `pl.DataFrame` (the convenient default).
+
+| explicit `output_format` | Result |
 |---|---|
-| `"polars"` (default) | returns `pl.DataFrame` |
+| `"polars"` | returns `pl.DataFrame` |
 | `"arrow"` | returns `pa.Table` (zero-copy) |
-| `"parquet"` | writes parquet (uses `output_path_parquet`); returns path |
-| `"csv"` | writes CSV (uses `csv_path`); returns path |
-- **Back-compat**: existing positional `output_path_parquet` / `csv_path` calls still write files as before.
-- **Error**: unknown `output_format` → `ValueError` listing valid options.
+| `"parquet"` | writes parquet to `output_path_parquet`; returns path |
+| `"csv"` | writes CSV to `csv_path`; returns path |
+
+- **Back-compat (API-6)**: a legacy positional call `save_mirror_table("out.parquet")` still
+  **writes a parquet file** (rule 2) — it does NOT silently return a DataFrame.
+- **Error**: explicit unknown `output_format` → `ValueError` listing valid options; a file format
+  requested without its path → `ValueError`.
 
 ### `travel(date)`
 Returns the reconstructed table state **as of** `date` (UTC-compared). Built on `as_of` over the
@@ -50,11 +61,23 @@ Preserved signatures; now computed over the reconstructed view / change-log.
 
 Exposed for the Viewer + auditors (see data-model.md). Pure reads over the change-log.
 
+**Exposure surface (U2):** the primitives are implemented as functions in `reconstruct.py` and
+**re-exported as thin `FluxState` methods** so both call styles work — `fs.get_timeline(...)`
+(as in quickstart.md) and `reconstruct.get_timeline(store, ...)`. The `FluxState` method binds the
+store; the module function takes the store explicitly.
+
+**`as_of` — two distinct functions (I2), do not conflate:**
 ```python
-as_of(entity_id, field, T) -> {"date": datetime, "value": Any} | None
-row_state(entity_id, T)     -> {"state": "active"|"deleted"|"unborn", "resurrected": bool}
+# Internal series-level primitive (binary-searchable over one cell's ordered history):
+reconstruct._as_of(history: list[{date, value}], T) -> {"date": datetime, "value": Any} | None
+# Public resolver (looks up the (entity_id, field) series, then applies _as_of):
+as_of(entity_id, field, T)          -> {"date": datetime, "value": Any} | None
+```
+
+```python
+row_state(entity_id, T)             -> {"state": "active"|"deleted"|"unborn", "resurrected": bool}
 get_timeline(entity_id, field=None) -> list[{"date": datetime, "value": Any}]
-change_count(entity_id)     -> int
+change_count(entity_id)             -> int
 ```
 - All `value`s are cast back to their recorded `dtype`.
 - `T` / `date` inputs normalized to UTC before comparison.

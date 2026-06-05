@@ -83,12 +83,15 @@ to express in the old mirror-table model; capturing them is a core reason for th
 
 **Independent Test**: Capture a record, capture a snapshot where it is absent, then capture a
 snapshot where it returns; reconstruct its timeline and confirm a continuous
-active → deleted → active trail under one identity.
+active → deleted → active trail under one identity. (Note: this story *extends* US1's
+full-outer-join diff and US2's reconstruction primitives rather than standing entirely alone — it
+is verifiable in isolation against its own change-log store, but is built after US1/US2.)
 
 **Acceptance Scenarios**:
 
 1. **Given** a record present in snapshot 1 and absent in snapshot 2, **When** snapshot 2 is
-   captured, **Then** a deletion event is recorded for that record's identity.
+   captured, **Then** a single `__deleted__` marker event (value null) is recorded for that
+   record's `entity_id`.
 2. **Given** a record previously deleted, **When** it reappears in a later snapshot, **Then** a
    reactivation is recorded and its timeline reads active → deleted → active without a new,
    separate identity.

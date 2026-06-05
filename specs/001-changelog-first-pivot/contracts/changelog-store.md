@@ -31,9 +31,9 @@ Columns (see data-model.md "Change Event"):
 |---|---|---|
 | `entity_id` | string | yes |
 | `timestamp` | timestamp (UTC) | yes |
-| `field` | string | yes |
-| `value` | string (nullable) | yes (null ⇒ deletion / SQL null) |
-| `dtype` | string | yes |
+| `field` | string | yes — a tracked column name, OR the reserved `"__deleted__"` for a deletion marker row |
+| `value` | string (nullable) | yes — `null` for a `"__deleted__"` marker or a genuine SQL null (distinguished by `dtype`) |
+| `dtype` | string | yes — `"null"` on a deletion marker row |
 | `snapshot_id` | string | yes |
 
 **Write requirements**

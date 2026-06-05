@@ -15,15 +15,18 @@ One row in `events/<ts>.parquet`. Records a single field's value for one record 
 |---|---|---|
 | `entity_id` | string (or source key type, rendered stable) | The record's stable identity. Ties all events — including delete/resurrect — for one logical row together. From `key_column`. |
 | `timestamp` | datetime, **UTC** | Event time. tz-aware inputs converted to UTC; tz-naive declared UTC. Drives `asOf`/window pruning. |
-| `field` | string | The tracked column this event is for. The sentinel field/value `__deleted__` marks a lifecycle deletion. |
-| `value` | string | The new value, rendered. `null` for a deletion event. Cast back to `dtype` on read. |
+| `field` | string | The tracked column this event is for. A **deletion** is encoded as a single marker row with the reserved field name `field = "__deleted__"` (not one row per column). |
+| `value` | string | The new value, rendered. `null` for a deletion marker row. Cast back to `dtype` on read. |
 | `dtype` | string (type tag) | Original Polars dtype, e.g. `int64`, `float64`, `utf8`, `bool`, `datetime[us, UTC]`, `null`. Enables lossless restore. |
 | `snapshot_id` | string (hash) | Identifies the capture/batch that produced this event. Basis for idempotency anti-join. |
 
 **Validation rules**
 - `entity_id` MUST be non-null and stable across snapshots (same logical row ⇒ same id).
 - `timestamp` MUST be UTC; events for one `(entity_id, field)` form a time-ordered series.
-- A deletion event has `value = null` and is keyed by `entity_id` (produced only by the full-outer-join "in OLD, not NEW" branch).
+- A deletion event is **exactly one marker row**: `field = "__deleted__"`, `value = null`,
+  `dtype = "null"`, keyed by `entity_id`, produced only by the full-outer-join "in OLD, not NEW"
+  branch. Reconstruction reads this marker (not per-field nulls) to set `row_state = deleted`.
+  `"__deleted__"` is a reserved field name and MUST NOT collide with a real tracked column.
 - `dtype = null` (or `value = null`) represents a genuine SQL null — never the literal string `"NULL"`.
 - Idempotency key: `(entity_id, field, snapshot_id)` is unique within the store.
 

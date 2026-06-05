@@ -13,6 +13,13 @@ numpy = "^2.1.0"
 pyarrow = "^17.0.0"
 humanize = "^4.10.0"
 tqdm = "^4.66.5"
+# Pre-existing (undeclared) runtime dep: mirror_validator.py uses pydantic.BaseModel
+# and __init__.py imports it unconditionally. Declared so a clean venv imports cleanly
+# (SC-006). NOT a new P1 dependency — surfacing existing usage. See spec U3 remediation.
+pydantic = "^2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0"
 
 
 [build-system]
