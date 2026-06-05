@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxState — Keep or Drop? · Decision One-Pager</title>
+<style>
+  :root{
+    --ink:#1a1a1a; --paper:#fbfaf7; --line:#d8d2c4; --mut:#6b6459;
+    --keep:#2e6f4e; --drop:#a23b2c; --warn:#b07a16; --accent:#2e5d7d;
+    --chip:#efece4;
+  }
+  *{box-sizing:border-box}
+  html{font-size:15px}
+  body{margin:0;background:#e9e6df;color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Georgia,serif;line-height:1.45}
+  .sheet{max-width:1080px;margin:24px auto;background:var(--paper);
+    padding:38px 46px 46px;box-shadow:0 1px 0 #fff inset,0 8px 30px rgba(0,0,0,.12);
+    border:1px solid var(--line)}
+  h1{font-size:30px;margin:0 0 2px;letter-spacing:-.4px}
+  .sub{color:var(--mut);font-size:13px;margin:0 0 4px;font-style:italic}
+  .rule{height:2px;background:var(--ink);margin:14px 0 18px}
+  .verdict{display:flex;gap:18px;align-items:stretch;margin:0 0 20px}
+  .vbox{flex:1;border:1px solid var(--line);background:#fff;padding:16px 18px}
+  .vbox .tag{font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:10.5px;
+    text-transform:uppercase;letter-spacing:1.2px;color:var(--mut)}
+  .vbox .big{font-size:22px;font-weight:700;margin:5px 0 2px;letter-spacing:-.3px}
+  .keep{color:var(--keep)} .drop{color:var(--drop)} .warn{color:var(--warn)} .accent{color:var(--accent)}
+  .conf{font-size:13px;color:var(--mut)}
+  .meter{height:8px;background:var(--chip);border-radius:5px;margin-top:7px;overflow:hidden}
+  .meter>i{display:block;height:100%;width:94%;background:var(--keep)}
+  h2{font-size:13px;text-transform:uppercase;letter-spacing:1.6px;margin:24px 0 9px;
+    color:var(--ink);border-bottom:1px solid var(--line);padding-bottom:5px}
+  p{margin:0 0 9px}
+  .lede{font-size:15.5px}
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:20px}
+  table{width:100%;border-collapse:collapse;font-size:12.3px;margin:2px 0 6px}
+  th,td{text-align:left;padding:5px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);font-weight:600}
+  td.n{font-variant-numeric:tabular-nums;text-align:center;width:34px}
+  .win td{background:#eef5ef}
+  .win td:first-child{font-weight:700;color:var(--keep)}
+  .tot{font-weight:700;font-variant-numeric:tabular-nums}
+  ol,ul{margin:4px 0 8px;padding-left:20px}
+  li{margin:3px 0;font-size:13px}
+  .chip{display:inline-block;font-family:ui-monospace,Menlo,monospace;font-size:10.5px;
+    background:var(--chip);border:1px solid var(--line);border-radius:3px;padding:1px 6px;margin:1px 2px 1px 0}
+  .p0{color:var(--drop);font-weight:700}
+  .tree{font-family:ui-monospace,Menlo,monospace;font-size:11.5px;line-height:1.6;
+    background:#fff;border:1px solid var(--line);padding:12px 14px;white-space:pre-wrap}
+  .bugs td:first-child{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--drop)}
+  .foot{margin-top:22px;border-top:2px solid var(--ink);padding-top:10px;
+    font-size:11px;color:var(--mut);display:flex;justify-content:space-between}
+  .callout{background:#fbf4e6;border-left:3px solid var(--warn);padding:9px 13px;font-size:13px;margin:8px 0}
+  .keepbar{background:#eef5ef;border-left:3px solid var(--keep);padding:9px 13px;font-size:13px;margin:8px 0}
+  b.lab{font-variant:small-caps;letter-spacing:.3px}
+  @media print{body{background:#fff}.sheet{box-shadow:none;margin:0;border:none;max-width:none}}
+  @media(max-width:720px){.cols{grid-template-columns:1fr}.verdict{flex-direction:column}}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <h1>FluxState — Keep, or rebuild the wheel?</h1>
+  <p class="sub">An honest develop-vs-drop call · grounded in the real ~6,300-LOC repo · resolved by a 5-round Claude × Gemini paired debate · 2026-06-05</p>
+  <div class="rule"></div>
+
+  <div class="verdict">
+    <div class="vbox">
+      <div class="tag">The verdict</div>
+      <div class="big keep">KEEP — don't drop it</div>
+      <div class="conf">…but execute a <b>changelog-first storage pivot</b>. Keeping it <i>as-is</i> is the wrong answer too.</div>
+    </div>
+    <div class="vbox">
+      <div class="tag">Joint confidence (Claude + Gemini)</div>
+      <div class="big keep">94%</div>
+      <div class="meter"><i></i></div>
+      <div class="conf">Converged independently across 5 rounds.</div>
+    </div>
+    <div class="vbox">
+      <div class="tag">Effort to production-worthy</div>
+      <div class="big accent">~5.5 days</div>
+      <div class="conf">4 of 5 steps are blockers; the O(R²) fix is ~10 lines.</div>
+    </div>
+  </div>
+
+  <p class="lede"><b>Is there an existing open-source "time machine" so you don't rebuild the wheel?</b> Yes — several (dbt&nbsp;snapshot, Snowflake&nbsp;Streams, XTDB, Datomic, Dolt, Hudi). They solve ~90% of FluxState. <b>But none owns FluxState's exact niche:</b> a <i>single-table/view</i>, <i>engine-portable</i> (Polars-on-anything), <i>cell-level</i> change historian whose output is a ready-to-render per-cell timeline — and that runs with <i>zero DDL rights</i> off Snowflake entirely. That sliver is real and defensible. The catch: the <i>current implementation</i> is a scaling bomb, so "keep" only wins if you fix the storage model.</p>
+
+  <div class="keepbar"><b class="lab">Your single-table premise holds up.</b> Pointing at one table/view (not the whole DB) is genuinely surgical — you pay temporal-state cost only for the surface you care about. Whole-DB engines (XTDB, Datomic, Snowflake Time Travel) version everything. That selectivity is a point in FluxState's favour, <i>not</i> a misunderstanding.</div>
+
+  <h2>Why not just drop it — the honest case for each rival</h2>
+  <div class="cols">
+    <ul>
+      <li><b>dbt&nbsp;snapshot (SCD2)</b> — battle-tested, near-zero new code, great for <i>population</i> compliance queries. <span class="mut">But row-versioned, Snowflake-resident, no per-cell timeline object, useless off-warehouse.</span></li>
+      <li><b>Snowflake Streams + Tasks</b> — cheapest possible CDC, only processes real changes. <span class="mut">But hard vendor lock + needs CREATE STREAM / EXECUTE TASK rights you may not have.</span></li>
+    </ul>
+    <ul>
+      <li><b>XTDB / Datomic</b> — true bitemporal time-travel SQL. <span class="mut">But whole-DB engines — not a single-table drop-in, big adoption tax.</span></li>
+      <li><b>Oxen <span class="chip">diff --keys</span> / daff</b> — ready-made cell-level diff. <span class="mut">Borrow the idea, not the dependency (see infusion call below).</span></li>
+    </ul>
+  </div>
+
+  <h2>The scored decision (weighted for a solo eng: HCC audit today, reuse tomorrow)</h2>
+  <table>
+    <tr><th>Option</th><th class="n">Dev</th><th class="n">Scale</th><th class="n">Port</th><th class="n">Query/Compl.</th><th class="n">UI</th><th class="n">Maint.</th><th class="n">Lock</th><th class="n">Σ</th></tr>
+    <tr class="win"><td>KEEP — storage pivot</td><td class="n">3</td><td class="n">4</td><td class="n">4</td><td class="n">4</td><td class="n">4</td><td class="n">4</td><td class="n">4</td><td class="n tot">95</td></tr>
+    <tr><td>KEEP — as-is</td><td class="n">5</td><td class="n">2</td><td class="n">5</td><td class="n">2</td><td class="n">5</td><td class="n">3</td><td class="n">5</td><td class="n tot">92</td></tr>
+    <tr><td>DROP → dbt snapshot</td><td class="n">4</td><td class="n">4</td><td class="n">2</td><td class="n">5</td><td class="n">2</td><td class="n">4</td><td class="n">3</td><td class="n tot">85</td></tr>
+    <tr><td>DROP → Snowflake Streams</td><td class="n">2</td><td class="n">5</td><td class="n">1</td><td class="n">5</td><td class="n">1</td><td class="n">5</td><td class="n">1</td><td class="n tot">77</td></tr>
+  </table>
+
+  <div class="cols">
+    <div>
+      <h2>30-second decision tree</h2>
+      <div class="tree">dataset &gt;10M rows OR high-velocity?
+  └─ yes → <b class="drop">DROP</b> (Streams / dbt)
+  └─ no  → must run on DuckDB/CSV/Postgres?
+       └─ yes → <b class="keep">KEEP</b> (the portable niche)
+       └─ no  → main query = population-wide
+                compliance / whole-table PIT?
+            └─ yes → have DDL rights?
+                 └─ yes → <b class="drop">DROP</b> (SCD2)
+                 └─ no  → <b class="keep">KEEP</b> (pivot)
+            └─ no  → <b class="keep">KEEP</b> (timeline-UI win)</div>
+      <p style="font-size:11.5px;margin-top:6px" class="mut"><b>KEEP overrides even at scale</b> if: no CREATE-STREAM rights (shadow-IT analyst), schema drifts weekly (ragged source), or the source has no clean primary keys.</p>
+    </div>
+    <div>
+      <h2>When to revisit & drop later</h2>
+      <p style="font-size:13px">The one query that flips the call to <b class="drop">DROP</b>:</p>
+      <div class="callout"><b>"Show me the state of all 50,000 patients as of Jan&nbsp;12, 2023"</b> — a whole-table point-in-time reconstruction.
+      <br>• <b>Once a year</b> → keep FluxState (checkpoint files cover it).
+      <br>• <b>Every Monday</b> → drop to dbt-snapshot / Streams; SQL engines are built for that join, Polars will hit a RAM ceiling.</div>
+      <p style="font-size:12.5px" class="mut">Other drop triggers: legal needs cryptographic chain-of-custody (<i>who</i> changed it, not just what); data crosses into millions of rows with daily full-table audits.</p>
+    </div>
+  </div>
+
+  <h2>If you keep it — the build, on top of the existing code</h2>
+  <table>
+    <tr><th>Step</th><th>What</th><th>Effort</th><th>Blocker?</th></tr>
+    <tr><td class="p0">P0</td><td>Kill <span class="chip">fluxstate_fixed.py</span>; replace the O(R²) <span class="chip">.index()</span>-in-loop update with a <b>Polars keyed join-diff</b> (join on PK → unpivot → filter old≠new). Hash-join kills the quadratic blowup for free.</td><td>~1d</td><td class="p0">YES</td></tr>
+    <tr><td class="p0">P1</td><td>Redirect <span class="chip">save_mirror_table</span> from full-parquet-rewrite to <b>append-only change-log</b> <span class="chip">(entity_id, ts, field, value, dtype, snapshot_id)</span>. Write one <span class="chip">events_&lt;ts&gt;.parquet</span> per run into a directory (parquet is immutable — never re-write one file).</td><td>~1d</td><td class="p0">YES</td></tr>
+    <tr><td class="p0">P2</td><td><b>Tagged-value type fix</b>: store value + a <span class="chip">dtype</span> tag, cast back on read. Ends the cast-everything-to-string type loss and the <span class="chip">"NULL"</span>-vs-real-<span class="chip">None</span> collision (use Polars <span class="chip">is_null</span>/<span class="chip">fill_null</span>). Force all timestamps to <b>UTC</b>.</td><td>~2d</td><td class="p0">YES</td></tr>
+    <tr><td>P3</td><td><span class="chip">get_timeline(id)</span> reconstruction (lazy scan→filter→sort→struct) rebuilds the ergonomic <span class="chip">[{date,value}]</span> for the auditor UI — <i>without</i> ever storing JSON-in-cell.</td><td>~1d</td><td>no</td></tr>
+    <tr><td>P4</td><td>Idempotency: anti-join on <span class="chip">(entity_id, field, snapshot_id)</span> so re-running the same snapshot can't double-append. Plus a <b>full</b> join so vanished rows log a <span class="chip">__deleted__</span> event (audit needs removals).</td><td>~0.5d</td><td>no</td></tr>
+  </table>
+
+  <div class="cols">
+    <div>
+      <h2>Infusion: Oxen / daff?</h2>
+      <p style="font-size:13px"><b>Do not hard-depend on either.</b> Re-implement the Oxen-style <i>keyed cell-diff</i> in ~20 lines of Polars (already a dependency) — that alone deletes the O(R²) bug. Keep <b>daff / Oxen as an optional "pretty diff" renderer</b> for human audit review only, never the core engine. The IO/CLI tax isn't worth it for a single-table batch job.</p>
+    </div>
+    <div>
+      <h2>Improvements worth adding</h2>
+      <ul>
+        <li><b>Storage Adapter</b> interface (LocalFS / S3 / Snowflake-stage) so "engine-agnostic" is true — today it secretly assumes a filesystem.</li>
+        <li><b>Checkpoint compaction</b> every N runs → keeps whole-table time-travel from going O(N).</li>
+        <li><b>Row-hash skip</b>: a tiny <span class="chip">(id, row_hash)</span> summary lets you skip unchanged rows instantly at scale.</li>
+        <li><b>generate_audit_bundle(id)</b> → self-contained offline HTML for a compliance officer.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>Adversarial audit — the real bugs (fix order = P0→P2 above)</h2>
+  <table class="bugs">
+    <tr><th>Site</th><th>Issue</th><th>Severity</th></tr>
+    <tr><td>update · L226/253</td><td>Linear <span class="chip">.index()</span> inside the per-row loop → O(rows²) update; times out a warehouse at scale</td><td><b class="drop">HIGH</b></td></tr>
+    <tr><td>save_mirror_table · L289/294</td><td>Serializes every cell's full history + rewrites the entire parquet every run → O(R×C×H) bomb</td><td><b class="drop">HIGH</b></td></tr>
+    <tr><td>two files</td><td><span class="chip">fluxstate.py</span> vs <span class="chip">fluxstate_fixed.py</span> diverge; unclear which is authoritative → silent loss of fixes</td><td><b class="drop">HIGH</b></td></tr>
+    <tr><td>__init__ · L61-65</td><td>All non-key columns cast to <span class="chip">Utf8</span> → numeric/datetime type loss, sub-second precision gone</td><td><b class="warn">MED</b></td></tr>
+    <tr><td>L49 / L218</td><td>Sentinel <span class="chip">"NULL"</span> string collides with a real <span class="chip">None</span> → undetectable data loss</td><td><b class="warn">MED</b></td></tr>
+    <tr><td>cell storage · L289</td><td>JSON-in-cell anti-pattern → kills columnar compression + needs lateral-flatten to query</td><td><b class="warn">MED</b></td></tr>
+    <tr><td>update path</td><td>Pydantic validator runs on init only, never on update → corruption goes undetected</td><td><b class="warn">MED</b></td></tr>
+  </table>
+  <p style="font-size:11.5px" class="mut"><b>Maturity:</b> prototype / late-dev (~85% claimed, inflated). Smoke tests on 5–10 rows; <b>zero</b> performance or scale tests. Real use today = Herself Health HCC risk-coding audit trail.</p>
+
+  <h2>Bottom line</h2>
+  <p class="lede"><b class="keep">Don't drop it, and don't ship it as-is.</b> The niche is real — keep FluxState as the <i>portable, zero-DDL, single-table cell historian</i> — but spend ~5–6 focused days converting it from a "rewrite-the-whole-mirror" snapshot tool into an <b>append-only change-log with on-demand reconstruction</b>. That single move neutralises every HIGH-severity bug at once and makes the "engine-agnostic watcher" pitch actually true. Re-evaluate the moment whole-table, population-wide point-in-time audits become a <i>weekly</i> need — that's the day dbt-snapshot wins.</p>
+
+  <div class="foot">
+    <span>Method: 5-round Claude × Gemini paired debate · repo read at ~6.3K LOC · 2 adversarial Explore passes</span>
+    <span>Confidence 94% · single biggest flip-risk: the weekly "Audit-All" query</span>
+  </div>
+
+</div>
+</body>
+</html>

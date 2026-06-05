@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxState · Temporal Ghost — interactive prototype</title>
+<style>
+:root{
+  --paper:#fbfaf7; --card:#ffffff; --ink:#1c1c1c; --line:#dcd6c8; --mut:#6c655a; --dim:#a39c8c;
+  --add:#2e7d4f; --addbg:#e7f3ea; --del:#b23b2c; --delbg:#fbe9e6;
+  --mod:#9a6b12; --modbg:#fdf3df; --col:#2e5d7d; --colbg:#e8f0f5;
+  --accent:#2e5d7d; --chip:#efece4;
+  --heat1:rgba(46,93,125,.07); --heat2:rgba(154,107,18,.13);
+  --heat3:rgba(154,107,18,.24); --heat4:rgba(178,59,44,.20);
+  --serif:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e9e6df;color:var(--ink);font-family:var(--sans);font-size:14px}
+.wrap{max-width:1180px;margin:22px auto;background:var(--paper);border:1px solid var(--line);
+  box-shadow:0 1px 0 #fff inset,0 8px 30px rgba(0,0,0,.12);padding:26px 30px 50px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:12px}
+h1{font-family:var(--serif);font-size:24px;margin:0;letter-spacing:-.3px;font-weight:700}
+h1 .gh{color:var(--mut);font-weight:400}
+.tagline{color:var(--mut);font-size:12.5px;font-style:italic}
+.modebar{margin-left:auto;display:flex;gap:6px}
+.mbtn{background:var(--chip);color:var(--mut);border:1px solid var(--line);
+  border-radius:7px;padding:6px 13px;font-size:12.5px;cursor:pointer}
+.mbtn.on{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
+
+/* ===== TIME CONTROL : slider IS the change-density histogram ===== */
+.timewrap{margin:16px 0 8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.tctl{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap}
+.play{width:26px;height:26px;border-radius:50%;border:1px solid var(--accent);background:var(--accent);
+  color:#fff;font-size:9.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;padding:0}
+.play:hover{filter:brightness(1.08)}
+.stepb{width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:var(--chip);
+  color:var(--ink);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0}
+.stepb:hover{background:#e6e2d8}
+.asof{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;font-weight:600;
+  background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:4px 10px}
+.asof .lbl{color:var(--mut);font-weight:400;font-size:10px;margin-right:6px;text-transform:uppercase;letter-spacing:1px;font-family:var(--sans)}
+.hint{color:var(--dim);font-size:11px;margin-left:auto}
+kbd{background:#fff;border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:10.5px;color:var(--mut);font-family:var(--mono)}
+
+.histo{position:relative;height:20px;margin-top:8px}
+.track{position:absolute;inset:0;border-radius:10px;border:1px solid var(--line);
+  background:#efece4;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.07)}
+.bars{position:absolute;inset:0;display:flex}
+.bar{flex:1;height:100%;background:var(--col)}          /* same height — opacity = amount of change */
+.fill{position:absolute;top:0;bottom:0;left:0;width:100%;background:rgba(46,93,125,.15);z-index:1}
+.ticks{position:relative;height:13px;margin-top:4px}
+.tick{position:absolute;top:0;width:1px;height:4px;background:var(--dim)}
+.axis{position:absolute;bottom:0;font-size:9.5px;color:var(--dim);transform:translateX(-50%);font-family:var(--mono)}
+.playhead{position:absolute;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;
+  background:#fff;border:2.5px solid var(--del);box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:none;z-index:5}
+#scrub{position:absolute;top:-4px;left:0;width:100%;height:28px;margin:0;
+  -webkit-appearance:none;appearance:none;background:transparent;cursor:pointer;z-index:6}
+#scrub::-webkit-slider-runnable-track{height:28px;background:transparent}
+#scrub::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:28px;background:transparent;cursor:grab}
+#scrub::-moz-range-track{height:28px;background:transparent}
+#scrub::-moz-range-thumb{width:18px;height:28px;background:transparent;border:none;cursor:grab}
+.htip{position:absolute;transform:translateX(-50%);bottom:70px;background:#1c1c1c;border:1px solid #000;
+  border-radius:6px;padding:5px 9px;font-size:11px;color:#f3efe6;white-space:nowrap;pointer-events:none;
+  display:none;z-index:9;box-shadow:0 6px 18px rgba(0,0,0,.3);font-family:var(--mono)}
+.htip b{color:#fff}
+
+/* ===== TABLE ===== */
+.tablewrap{margin-top:14px;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:0;text-align:left}
+th{background:#f2efe7;color:var(--mut);font-size:10.5px;text-transform:uppercase;letter-spacing:.7px;
+  font-weight:600;padding:9px 12px;position:sticky;top:0;z-index:2;white-space:nowrap}
+th.gut,td.gut{width:74px;text-align:center}
+td .cellpad{padding:8px 12px;min-height:34px;display:flex;align-items:center;gap:6px;cursor:pointer;position:relative}
+td.cell{transition:background .2s}
+td.v1{background:var(--heat1)}td.v2{background:var(--heat2)}td.v3{background:var(--heat3)}td.v4{background:var(--heat4)}
+td.cell:hover{outline:1.5px solid var(--accent);outline-offset:-1.5px}
+td.cell.pinned{outline:2px solid var(--mod);outline-offset:-2px}
+.val{font-family:var(--mono);font-variant-numeric:tabular-nums;color:var(--ink)}
+.idcell{font-family:var(--mono);font-weight:600;color:#3a4350;font-variant-numeric:tabular-nums;white-space:nowrap}
+.idcell .phoenix{color:var(--add);margin-left:5px;font-size:11px}
+@keyframes flash{0%{background:rgba(251,191,36,.55)}100%{background:transparent}}
+td.cell.flash{animation:flash 1.1s ease-out}
+td.cell .cellpad{white-space:nowrap}
+.d-old{color:var(--del);text-decoration:line-through;opacity:.85;display:inline-block;
+  max-width:240px;overflow:hidden;white-space:nowrap;vertical-align:bottom;
+  transition:opacity .55s ease,max-width .55s ease,margin .55s ease}
+.d-arr{color:var(--mut);padding:0 5px;display:inline-block;transition:opacity .55s ease,padding .55s ease}
+.d-new{color:var(--add);font-weight:700}
+.d-old.fade{opacity:0;max-width:0;margin:0}
+.d-arr.fade{opacity:0;padding:0}
+.stepb.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+tr.deleted td{background:repeating-linear-gradient(45deg,#fbe9e6,#fbe9e6 9px,#f5dcd7 9px,#f5dcd7 18px) !important;
+  color:#8a4a3f}
+tr.deleted .val{text-decoration:line-through;color:#8a4a3f}
+tr.deleted .idcell{color:var(--del)}
+tr.unborn td{opacity:.22;pointer-events:none}
+tr.unborn .val::after{content:'·';color:var(--dim)}
+tr.resurrected{box-shadow:inset 3px 0 0 var(--add)}
+.void{color:var(--dim)}
+.gutwrap{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 6px}
+.gcount{font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.gcount b{color:var(--mod)}
+.spark{display:block}
+
+/* mini popover (hover) */
+.peek{position:fixed;background:#fff;border:1px solid var(--line);border-radius:8px;padding:8px 10px;
+  font-size:11.5px;box-shadow:0 10px 30px rgba(0,0,0,.18);z-index:50;pointer-events:none;display:none;max-width:240px}
+.peek .pt{color:var(--mut);font-size:10px;text-transform:uppercase;letter-spacing:.6px;margin-bottom:4px;font-weight:600}
+.peek .ev{display:flex;justify-content:space-between;gap:12px;padding:1px 0;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.peek .ev .d{color:var(--dim)}
+
+/* History Inspector (pinned) */
+.inspector{position:fixed;right:18px;bottom:18px;width:308px;background:var(--card);border:1px solid var(--mod);
+  border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.25);z-index:40;display:none;overflow:hidden}
+.inspector.show{display:block}
+.ihead{background:#f2efe7;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+.ihead .it{font-weight:700;font-size:13px;font-family:var(--mono)}.ihead .is{color:var(--mut);font-size:11px}
+.iclose{background:none;border:none;color:var(--mut);font-size:17px;cursor:pointer;line-height:1}
+.ibody{padding:12px 13px;max-height:320px;overflow:auto}
+.isparkbox{background:#faf8f2;border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:10px}
+.ievent{display:grid;grid-template-columns:14px 80px 1fr;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line);font-size:12px}
+.ievent:first-child{border-top:none}
+.idot{width:9px;height:9px;border-radius:50%;background:var(--col)}
+.idot.del{background:var(--del)}.idot.res{background:var(--add)}.idot.now{box-shadow:0 0 0 3px rgba(46,93,125,.22)}
+.ievent .id{color:var(--dim);font-variant-numeric:tabular-nums;font-size:11px;font-family:var(--mono)}
+.ievent .iv{font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.ievent.future{opacity:.4}
+.tagdel{color:var(--del);font-size:10.5px;font-weight:600;font-family:var(--sans)}
+.tagres{color:var(--add);font-size:10.5px;font-weight:600;font-family:var(--sans)}
+
+/* legend */
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:13px;font-size:11.5px;color:var(--mut)}
+.legend .li{display:flex;align-items:center;gap:6px}
+.sw{width:14px;height:14px;border-radius:3px;border:1px solid rgba(0,0,0,.12)}
+.sw.h{background:var(--heat3)}.sw.f{background:rgba(251,191,36,.7)}
+.sw.d{background:repeating-linear-gradient(45deg,#fbe9e6,#fbe9e6 4px,#f5dcd7 4px,#f5dcd7 8px)}
+.sw.r{box-shadow:inset 3px 0 0 var(--add);background:#fff}
+
+/* ===== STATIC VIEW ===== */
+#staticView{display:none}
+#staticView.show{display:block}
+.staticsheet{background:var(--card);color:#1c1c1c;border:1px solid var(--line);border-radius:12px;padding:26px 28px;margin-top:14px}
+.staticsheet h2{margin:0 0 2px;font-size:19px;font-family:var(--serif)}
+.staticsheet .ssub{color:#6b6459;font-size:12px;font-style:italic;margin:0 0 14px}
+table.stat{border-collapse:collapse;width:100%;font-size:12px}
+table.stat th,table.stat td{border:1px solid #d8d2c4;padding:6px 9px;text-align:left;vertical-align:top}
+table.stat th{background:#f1ede4;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:#6b6459}
+.statval{font-weight:600;font-variant-numeric:tabular-nums;font-family:var(--mono)}
+.ghostsub{display:block;font-size:9.5px;color:#8a8377;font-variant-numeric:tabular-nums;margin-top:1px;font-family:var(--mono)}
+.up{color:#2e7d4f}.down{color:#b23b2c}
+td.volatile{background:#fdf3df;position:relative}
+.pulsering{position:absolute;top:3px;right:4px;width:8px;height:8px;border-radius:50%;background:#b07a16;
+  box-shadow:0 0 0 3px rgba(176,122,22,.2)}
+.lifecol{width:96px}
+.callouts{margin-top:14px;font-size:12px}
+.callouts .co{background:#fdf3df;border-left:3px solid #b07a16;padding:7px 11px;margin:6px 0;border-radius:0 6px 6px 0}
+@media print{body{background:#fff}.wrap{max-width:none;box-shadow:none;border:none;margin:0}#interactiveView,.timewrap,header .modebar{display:none !important}#staticView{display:block !important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>FluxState <span class="gh">· Temporal Ghost</span></h1>
+    <span class="tagline">scrub time · hover to peek · click a cell to pin its full history</span>
+    <div class="modebar">
+      <button class="mbtn on" id="mInteractive">Interactive</button>
+      <button class="mbtn" id="mStatic">Static / print</button>
+    </div>
+  </header>
+
+  <div id="interactiveView">
+    <!-- TIME CONTROL : slider IS the change-density histogram -->
+    <div class="timewrap">
+      <div class="tctl">
+        <button class="play" id="playBtn" title="Play / pause time-lapse">▶</button>
+        <button class="stepb" id="prevEv" title="Previous change event">‹</button>
+        <button class="stepb" id="nextEv" title="Next change event">›</button>
+        <button class="stepb" id="loopBtn" title="Loop playback">⟳</button>
+        <button class="stepb on" id="diffToggle" title="Show before → after while scrubbing" style="width:auto;padding:0 11px;font-size:12px">⇄ diff: on</button>
+        <div class="asof"><span class="lbl">as of</span><span id="asofDate">—</span></div>
+        <div class="hint">drag the histogram · <kbd>←</kbd><kbd>→</kbd> step events · hover bars to see what changed</div>
+      </div>
+      <div class="histo" id="histo">
+        <div class="track"><div class="bars" id="bars"></div><div class="fill" id="fill"></div></div>
+        <div class="playhead" id="playhead"></div>
+        <input type="range" id="scrub" min="0" max="100" value="100" step="1">
+        <div class="htip" id="htip"></div>
+      </div>
+      <div class="ticks" id="ticks"></div>
+    </div>
+
+    <div class="tablewrap">
+      <table id="grid"><thead id="ghead"></thead><tbody id="gbody"></tbody></table>
+    </div>
+
+    <div class="legend">
+      <span class="li"><span class="sw h"></span> heat-tint = how often the cell changes</span>
+      <span class="li"><span class="sw f"></span> flash = value just changed as you scrubbed</span>
+      <span class="li"><span class="sw d"></span> deleted row (dropped from source)</span>
+      <span class="li"><span class="sw r"></span> resurrected (returned under same ID)</span>
+      <span class="li" style="color:var(--dim)">faded row = not yet in the dataset at this date</span>
+    </div>
+  </div>
+
+  <!-- STATIC PRINT VIEW -->
+  <div id="staticView">
+    <div class="staticsheet">
+      <h2>HCC Temporal Summary — as of latest snapshot</h2>
+      <p class="ssub">Static audit view · window 2026-01-01 → 2026-06-15 · current value with prior-value ghost · leading lifecycle trail · volatile cells ringed</p>
+      <table class="stat" id="statTable"></table>
+      <div class="callouts" id="callouts"></div>
+    </div>
+  </div>
+</div>
+
+<div class="peek" id="peek"></div>
+<div class="inspector" id="inspector">
+  <div class="ihead"><div><div class="it" id="iTitle">—</div><div class="is" id="iSub">—</div></div><button class="iclose" id="iClose">×</button></div>
+  <div class="ibody"><div class="isparkbox" id="iSpark"></div><div id="iEvents"></div></div>
+</div>
+
+<script>
+/* ============ DATA ============ */
+const START='2026-01-01', END='2026-06-15';
+const di=d=>Math.round((new Date(d)-new Date(START))/86400000);
+const TOTAL=di(END);
+const fmt=t=>{const dt=new Date(new Date(START).getTime()+t*86400000);
+  return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});};
+const COLS=['RISK_SCORE','HCC_CODE','PCP_ASSIGNED','STATUS','LAST_VISIT'];
+
+const RAW=[
+ {id:'P-101',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',1.20],['2026-02-10',1.55],['2026-04-20',1.82],['2026-05-25',2.04]],
+   HCC_CODE:[['2026-01-05','HCC-22'],['2026-03-15','HCC-22, 19']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Vance']],
+   STATUS:[['2026-01-05','Stable'],['2026-04-20','Watch'],['2026-05-25','Critical']],
+   LAST_VISIT:[['2026-01-05','2026-01-04'],['2026-02-10','2026-02-09'],['2026-04-20','2026-04-19'],['2026-05-25','2026-05-24']]}},
+ {id:'P-102',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',0.84],['2026-03-15',0.91]],
+   HCC_CODE:[['2026-01-05','HCC-85']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Okafor'],['2026-04-02','Dr. Lindt']],
+   STATUS:[['2026-01-05','Stable'],['2026-03-15','Resolved']],
+   LAST_VISIT:[['2026-01-05','2026-01-03'],['2026-03-15','2026-03-14']]}},
+ {id:'P-103',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',1.60],['2026-02-28',1.44],['2026-05-08',1.71]],
+   HCC_CODE:[['2026-01-05','HCC-18'],['2026-02-28','HCC-18, 40'],['2026-05-08','HCC-18, 40, 19']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Vance']],
+   STATUS:[['2026-01-05','Disputed'],['2026-02-28','Pending'],['2026-05-08','Billed']],
+   LAST_VISIT:[['2026-01-05','2026-01-02'],['2026-02-28','2026-02-27'],['2026-05-08','2026-05-07']]}},
+ {id:'P-104',life:[['2026-01-01','active'],['2026-03-15','deleted'],['2026-05-08','active']],cells:{
+   RISK_SCORE:[['2026-01-05',0.80],['2026-05-08',1.12]],
+   HCC_CODE:[['2026-01-05','HCC-40']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Lindt'],['2026-05-08','Dr. Okafor']],
+   STATUS:[['2026-01-05','Pending'],['2026-05-08','Active']],
+   LAST_VISIT:[['2026-01-05','2026-01-06'],['2026-05-08','2026-05-07']]}},
+ {id:'P-105',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',2.10]],
+   HCC_CODE:[['2026-01-05','HCC-12'],['2026-04-02','HCC-12, 11']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Mehta']],
+   STATUS:[['2026-01-05','Stable']],
+   LAST_VISIT:[['2026-01-05','2026-01-05'],['2026-04-02','2026-04-01']]}},
+ {id:'P-106',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',1.05],['2026-02-10',1.18],['2026-03-15',1.30],['2026-04-20',1.41],['2026-05-25',1.55]],
+   HCC_CODE:[['2026-01-05','HCC-55']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Okafor']],
+   STATUS:[['2026-01-05','Watch'],['2026-04-20','Critical']],
+   LAST_VISIT:[['2026-01-05','2026-01-04'],['2026-05-25','2026-05-23']]}},
+ {id:'P-107',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',0.62]],
+   HCC_CODE:[['2026-01-05','HCC-31']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Vance'],['2026-05-25','Dr. Mehta']],
+   STATUS:[['2026-01-05','Stable']],
+   LAST_VISIT:[['2026-01-05','2026-01-02']]}},
+ {id:'P-108',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',1.33],['2026-04-02',1.49]],
+   HCC_CODE:[['2026-01-05','HCC-22'],['2026-04-02','HCC-22, 85']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Lindt']],
+   STATUS:[['2026-01-05','Pending'],['2026-04-02','Billed']],
+   LAST_VISIT:[['2026-01-05','2026-01-07'],['2026-04-02','2026-04-01']]}},
+ {id:'P-109',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',0.95],['2026-05-08',0.88]],
+   HCC_CODE:[['2026-01-05','HCC-19']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Mehta']],
+   STATUS:[['2026-01-05','Resolved']],
+   LAST_VISIT:[['2026-01-05','2026-01-03'],['2026-05-08','2026-05-06']]}},
+ {id:'P-110',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',1.77],['2026-02-28',1.92],['2026-05-25',2.20]],
+   HCC_CODE:[['2026-01-05','HCC-85, 12']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Okafor']],
+   STATUS:[['2026-01-05','Critical'],['2026-02-28','Watch'],['2026-05-25','Stable']],
+   LAST_VISIT:[['2026-01-05','2026-01-04'],['2026-02-28','2026-02-26'],['2026-05-25','2026-05-22']]}},
+ {id:'P-111',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',0.40]],
+   HCC_CODE:[['2026-01-05','HCC-31']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Vance']],
+   STATUS:[['2026-01-05','Stable']],
+   LAST_VISIT:[['2026-01-05','2026-01-05']]}},
+ {id:'P-112',life:[['2026-04-02','active']],cells:{
+   RISK_SCORE:[['2026-04-02',1.15],['2026-05-25',1.38]],
+   HCC_CODE:[['2026-04-02','HCC-40']],
+   PCP_ASSIGNED:[['2026-04-02','Dr. Mehta']],
+   STATUS:[['2026-04-02','Pending'],['2026-05-25','Watch']],
+   LAST_VISIT:[['2026-04-02','2026-04-01'],['2026-05-25','2026-05-24']]}},
+ {id:'P-113',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',1.50],['2026-03-15',1.50]],
+   HCC_CODE:[['2026-01-05','HCC-18']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Lindt']],
+   STATUS:[['2026-01-05','Watch'],['2026-03-15','Watch']],
+   LAST_VISIT:[['2026-01-05','2026-01-06'],['2026-03-15','2026-03-13']]}},
+ {id:'P-114',life:[['2026-01-01','active']],cells:{
+   RISK_SCORE:[['2026-01-05',2.31],['2026-02-10',2.05],['2026-03-15',2.40],['2026-05-08',2.62]],
+   HCC_CODE:[['2026-01-05','HCC-12, 11, 85']],
+   PCP_ASSIGNED:[['2026-01-05','Dr. Okafor']],
+   STATUS:[['2026-01-05','Critical']],
+   LAST_VISIT:[['2026-01-05','2026-01-04'],['2026-03-15','2026-03-12'],['2026-05-08','2026-05-05']]}},
+];
+
+const ROWS=RAW.map(r=>({
+  id:r.id,
+  life:r.life.map(([d,s])=>({t:di(d),date:d,state:s})).sort((a,b)=>a.t-b.t),
+  cells:Object.fromEntries(COLS.map(c=>[c,(r.cells[c]||[]).map(([d,v])=>({t:di(d),date:d,v})).sort((a,b)=>a.t-b.t)]))
+}));
+
+/* ============ LOGIC ============ */
+function asOf(hist,T){let m=null;for(const e of hist){if(e.t<=T)m=e;else break;}return m;}
+function rowState(row,T){
+  if(!row.life.length||row.life[0].t>T)return {state:'unborn',resurrected:false};
+  let cur=row.life[0],hadDel=false;
+  for(const e of row.life){if(e.t<=T){if(e.state==='deleted')hadDel=true;cur=e;}else break;}
+  return {state:cur.state,resurrected:cur.state==='active'&&hadDel};
+}
+function changeCount(row){return COLS.reduce((n,c)=>n+Math.max(0,row.cells[c].length),0);}
+function volClass(n){return n>=8?'v4':n>=5?'v3':n>=3?'v2':n>=1?'v1':'';}
+
+const EVENTS=[];
+ROWS.forEach(r=>{COLS.forEach(c=>r.cells[c].forEach(e=>EVENTS.push({t:e.t,id:r.id,col:c,v:e.v})));
+  r.life.forEach(e=>{if(e.state!=='active'||e.t>0)EVENTS.push({t:e.t,id:r.id,col:'lifecycle',v:e.state});});});
+const SNAPS=[...new Set(EVENTS.map(e=>e.t))].sort((a,b)=>a-b);
+
+/* ============ HISTOGRAM ============ */
+const NB=30, bars=document.getElementById('bars'), ticksEl=document.getElementById('ticks');
+const buckets=new Array(NB).fill(0);
+EVENTS.forEach(e=>{const b=Math.min(NB-1,Math.floor(e.t/(TOTAL+1)*NB));buckets[b]++;});
+const maxB=Math.max(...buckets);
+buckets.forEach(c=>{const d=document.createElement('div');d.className='bar';
+  d.style.opacity=c?(.16+.72*c/maxB):0;bars.appendChild(d);});
+SNAPS.forEach(t=>{const tk=document.createElement('div');tk.className='tick';tk.style.left=(t/TOTAL*100)+'%';ticksEl.appendChild(tk);});
+['2026-01-01','2026-03-01','2026-05-01','2026-06-15'].forEach(d=>{
+  const a=document.createElement('div');a.className='axis';a.style.left=(di(d)/TOTAL*100)+'%';
+  a.textContent=new Date(d).toLocaleDateString('en-US',{month:'short'});ticksEl.appendChild(a);});
+
+/* ============ TABLE ============ */
+const ghead=document.getElementById('ghead'),gbody=document.getElementById('gbody');
+ghead.innerHTML='<tr><th class="gut">Δ&nbsp;activity</th><th>PATIENT_ID</th>'+COLS.map(c=>'<th>'+c+'</th>').join('')+'</tr>';
+const cellRef={};
+ROWS.forEach(row=>{
+  const tr=document.createElement('tr');tr.dataset.id=row.id;
+  const cnt=changeCount(row);
+  const gtd=document.createElement('td');gtd.className='gut';
+  const allEv=COLS.flatMap(c=>row.cells[c].map(e=>e.t));
+  const sparks=allEv.map(t=>'<line x1="'+(t/TOTAL*60).toFixed(1)+'" y1="0" x2="'+(t/TOTAL*60).toFixed(1)+'" y2="10" stroke="#2e5d7d" stroke-width="1.4" opacity="0.65"/>').join('');
+  gtd.innerHTML='<div class="gutwrap"><div class="gcount"><b>'+cnt+'</b> ch.</div><svg class="spark" width="60" height="11">'+sparks+'</svg></div>';
+  tr.appendChild(gtd);
+  const idtd=document.createElement('td');idtd.innerHTML='<div class="cellpad"><span class="idcell">'+row.id+'<span class="phoenix" style="display:none">✦</span></span></div>';
+  tr.appendChild(idtd);
+  row._phoenix=idtd.querySelector('.phoenix');
+  cellRef[row.id]={};
+  COLS.forEach(c=>{
+    const td=document.createElement('td');td.className='cell '+volClass(row.cells[c].length);
+    td.dataset.id=row.id;td.dataset.col=c;
+    td.innerHTML='<div class="cellpad"><span class="val"></span></div>';
+    tr.appendChild(td);
+    cellRef[row.id][c]={td,val:td.querySelector('.val'),prev:undefined};
+    td.addEventListener('mousemove',e=>showPeek(e,row,c));
+    td.addEventListener('mouseleave',hidePeek);
+    td.addEventListener('click',()=>pin(row,c,td));
+  });
+  gbody.appendChild(tr);
+  row._tr=tr;
+});
+
+/* ============ RENDER ============ */
+let curT=TOTAL, DIFFMODE=true;
+const DWELL=2600, FADEMS=750;   // fade-mode: linger DWELL ms, then fade over FADEMS
+function esc(s){return String(s).replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));}
+function clearCell(ref){clearTimeout(ref.settleT);clearTimeout(ref.endT);ref.td.classList.remove('diffing');ref.pinned=false;}
+function showDiff(ref,oldV,newV,pin,atT){
+  clearTimeout(ref.settleT);clearTimeout(ref.endT);
+  ref.td.classList.add('diffing');ref.pinned=pin;ref.pinT=atT;
+  ref.val.innerHTML='<span class="d-old">'+esc(oldV)+'</span><span class="d-arr">→</span><span class="d-new">'+esc(newV)+'</span>';
+  if(!pin){   // play / drag → linger, then fade old away
+    ref.settleT=setTimeout(()=>{const o=ref.val.querySelector('.d-old'),a=ref.val.querySelector('.d-arr');
+      if(o)o.classList.add('fade');if(a)a.classList.add('fade');},DWELL);
+    ref.endT=setTimeout(()=>{ref.val.textContent=newV;ref.td.classList.remove('diffing');},DWELL+FADEMS);
+  }
+  // pin=true → no timers: before→after stays until the user moves to another date
+}
+function render(T,flash,pin){
+  document.getElementById('asofDate').textContent=fmt(T);
+  document.getElementById('playhead').style.left=(T/TOTAL*100)+'%';
+  document.getElementById('fill').style.width=(T/TOTAL*100)+'%';
+  ROWS.forEach(row=>{
+    const st=rowState(row,T);
+    row._tr.className=st.state==='unborn'?'unborn':st.state==='deleted'?'deleted':(st.resurrected?'resurrected':'');
+    row._phoenix.style.display=st.resurrected?'inline':'none';
+    COLS.forEach(c=>{
+      const ref=cellRef[row.id][c];
+      if(st.state==='unborn'){clearCell(ref);ref.val.textContent='';ref.val.classList.add('void');ref.prev=undefined;return;}
+      ref.val.classList.remove('void');
+      const m=asOf(row.cells[c],T); const v=m?m.v:'ø';
+      const changed = flash && ref.prev!==undefined && String(ref.prev)!==String(v);
+      if(changed){
+        ref.td.classList.remove('flash');void ref.td.offsetWidth;ref.td.classList.add('flash');
+        if(DIFFMODE) showDiff(ref,ref.prev,v,pin,T);
+        else { clearCell(ref); ref.val.textContent=v; }
+      } else if(ref.td.classList.contains('diffing')){
+        // a diff is showing but this cell didn't change at T:
+        // if it was PINNED at a different date, the user moved on → settle it.
+        if(ref.pinned && ref.pinT!==T){ clearCell(ref); ref.val.textContent=v; }
+        // else: pinned-here or mid-fade → leave it
+      } else {
+        ref.val.textContent=v;
+      }
+      ref.prev=v;
+    });
+  });
+  if(pinned)markInspectorNow(T);
+}
+
+/* ============ SLIDER ============ */
+const scrub=document.getElementById('scrub');scrub.max=TOTAL;scrub.value=TOTAL;
+let raf=null;
+scrub.addEventListener('input',()=>{const T=+scrub.value;if(raf)cancelAnimationFrame(raf);
+  raf=requestAnimationFrame(()=>{curT=T;render(T,true,false);});});
+function setT(T,pin){T=Math.max(0,Math.min(TOTAL,T));curT=T;scrub.value=T;render(T,true,!!pin);}
+document.addEventListener('keydown',e=>{
+  if(e.key==='ArrowRight'){e.preventDefault();const nx=SNAPS.find(t=>t>curT);setT(nx??TOTAL,true);}
+  if(e.key==='ArrowLeft'){e.preventDefault();const pv=[...SNAPS].reverse().find(t=>t<curT);setT(pv??0,true);}
+});
+document.getElementById('nextEv').onclick=()=>{const nx=SNAPS.find(t=>t>curT);setT(nx??TOTAL,true);};
+document.getElementById('prevEv').onclick=()=>{const pv=[...SNAPS].reverse().find(t=>t<curT);setT(pv??0,true);};
+const diffToggle=document.getElementById('diffToggle');
+diffToggle.onclick=()=>{DIFFMODE=!DIFFMODE;diffToggle.textContent='⇄ diff: '+(DIFFMODE?'on':'off');
+  diffToggle.classList.toggle('on',DIFFMODE);};
+let LOOP=false;
+const loopBtn=document.getElementById('loopBtn');
+loopBtn.onclick=()=>{LOOP=!LOOP;loopBtn.classList.toggle('on',LOOP);};
+const playBtn=document.getElementById('playBtn');let timer=null;
+playBtn.onclick=()=>{
+  if(timer){clearInterval(timer);timer=null;playBtn.textContent='▶';return;}
+  playBtn.textContent='⏸';if(curT>=TOTAL)setT(0);
+  let i=SNAPS.findIndex(t=>t>curT);if(i<0)i=0;
+  timer=setInterval(()=>{
+    if(i>=SNAPS.length){
+      if(LOOP){i=0;setT(0,false);return;}
+      clearInterval(timer);timer=null;playBtn.textContent='▶';return;}
+    setT(SNAPS[i],false);i++;
+  },900);
+};
+const htip=document.getElementById('htip'),histo=document.getElementById('histo');
+histo.addEventListener('mousemove',e=>{
+  const rect=histo.getBoundingClientRect();const frac=(e.clientX-rect.left)/rect.width;
+  const t=Math.round(frac*TOTAL);
+  let near=null,best=8;SNAPS.forEach(s=>{if(Math.abs(s-t)<best){best=Math.abs(s-t);near=s;}});
+  if(near==null){htip.style.display='none';return;}
+  const evs=EVENTS.filter(x=>x.t===near);
+  const ids=[...new Set(evs.map(x=>x.id))];
+  htip.innerHTML='<b>'+fmt(near)+'</b> — '+evs.length+' change'+(evs.length>1?'s':'')+'<br>'+ids.slice(0,6).join(', ')+(ids.length>6?'…':'');
+  htip.style.left=(near/TOTAL*100)+'%';htip.style.display='block';
+});
+histo.addEventListener('mouseleave',()=>htip.style.display='none');
+
+/* ============ PEEK ============ */
+const peek=document.getElementById('peek');
+function showPeek(e,row,c){
+  const h=row.cells[c];if(!h.length){hidePeek();return;}
+  const last3=h.slice(-3).reverse();
+  peek.innerHTML='<div class="pt">'+row.id+' · '+c+'</div>'+last3.map(ev=>
+    '<div class="ev"><span class="d">'+ev.date+'</span><span>'+ev.v+'</span></div>').join('')+
+    (h.length>3?'<div class="ev"><span class="d">+'+(h.length-3)+' earlier — click to pin</span></div>':'');
+  peek.style.display='block';
+  let x=e.clientX+14,y=e.clientY+14;
+  if(x+250>innerWidth)x=e.clientX-250;if(y+120>innerHeight)y=e.clientY-120;
+  peek.style.left=x+'px';peek.style.top=y+'px';
+}
+function hidePeek(){peek.style.display='none';}
+
+/* ============ INSPECTOR ============ */
+let pinned=null;
+const inspector=document.getElementById('inspector');
+function pin(row,c,td){
+  document.querySelectorAll('td.pinned').forEach(x=>x.classList.remove('pinned'));td.classList.add('pinned');
+  pinned={row,c};
+  document.getElementById('iTitle').textContent=row.id+' · '+c;
+  document.getElementById('iSub').textContent=row.cells[c].length+' change events · '+changeCount(row)+' total on row';
+  const h=row.cells[c];const nums=h.map(e=>parseFloat(e.v)).filter(n=>!isNaN(n));
+  const spark=document.getElementById('iSpark');
+  if(nums.length===h.length&&h.length>1){
+    const mn=Math.min(...nums),mx=Math.max(...nums),W=278,H=46;
+    const pts=h.map(e=>{const x=e.t/TOTAL*W;const y=H-6-((parseFloat(e.v)-mn)/((mx-mn)||1))*(H-12);return [x,y];});
+    spark.innerHTML='<svg width="'+W+'" height="'+H+'"><polyline fill="none" stroke="#2e5d7d" stroke-width="2" points="'+
+      pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ')+'"/>'+
+      pts.map(p=>'<circle cx="'+p[0].toFixed(1)+'" cy="'+p[1].toFixed(1)+'" r="2.5" fill="#9a6b12"/>').join('')+'</svg>';
+  }else{
+    const W=278,H=46;spark.innerHTML='<svg width="'+W+'" height="'+H+'">'+
+      h.map(e=>{const x=e.t/TOTAL*W;return '<line x1="'+x.toFixed(1)+'" y1="8" x2="'+x.toFixed(1)+'" y2="'+(H-8)+'" stroke="#9a6b12" stroke-width="2"/>'+
+        '<circle cx="'+x.toFixed(1)+'" cy="'+(H-8)+'" r="2.5" fill="#2e5d7d"/>';}).join('')+'</svg>';
+  }
+  const life=row.life.filter(l=>!(l.state==='active'&&l.t===0));
+  let items=h.map(e=>({t:e.t,date:e.date,v:e.v,kind:'set'}));
+  life.forEach(l=>items.push({t:l.t,date:l.date,v:l.state==='deleted'?'row deleted':'row resurrected',kind:l.state==='deleted'?'del':'res'}));
+  items.sort((a,b)=>a.t-b.t);
+  document.getElementById('iEvents').innerHTML=items.map(it=>
+    '<div class="ievent'+(it.t>curT?' future':'')+'" data-t="'+it.t+'"><span class="idot '+(it.kind==='del'?'del':it.kind==='res'?'res':'')+'"></span>'+
+    '<span class="id">'+it.date+'</span><span class="iv">'+
+    (it.kind==='del'?'<span class="tagdel">'+it.v+'</span>':it.kind==='res'?'<span class="tagres">'+it.v+'</span>':it.v)+'</span></div>').join('');
+  inspector.classList.add('show');markInspectorNow(curT);
+}
+function markInspectorNow(T){inspector.querySelectorAll('.ievent').forEach(el=>{
+  el.classList.toggle('future',+el.dataset.t>T);
+  el.querySelector('.idot').classList.toggle('now',+el.dataset.t<=T);});}
+document.getElementById('iClose').onclick=()=>{inspector.classList.remove('show');pinned=null;
+  document.querySelectorAll('td.pinned').forEach(x=>x.classList.remove('pinned'));};
+
+/* ============ STATIC ============ */
+function buildStatic(){
+  const t=document.getElementById('statTable');
+  t.innerHTML='<tr><th class="lifecol">Lifecycle</th><th>PATIENT_ID</th>'+COLS.map(c=>'<th>'+c+'</th>').join('')+'</tr>';
+  const cellVol=[];
+  ROWS.forEach(r=>COLS.forEach(c=>{if(r.cells[c].length>=3)cellVol.push({id:r.id,c,n:r.cells[c].length,h:r.cells[c]});}));
+  cellVol.sort((a,b)=>b.n-a.n);
+  const topVol=new Set(cellVol.slice(0,3).map(x=>x.id+'|'+x.c));
+  ROWS.forEach(r=>{
+    const tr=document.createElement('tr');
+    const W=86,H=20;
+    const pts=[];for(let x=0;x<=TOTAL;x+=Math.ceil(TOTAL/40)){pts.push([x/TOTAL*W, rowState(r,x).state]);}
+    const segs=pts.map((p,i)=>{if(i===0)return'';const a=pts[i-1];const col=a[1]==='active'?'#2e7d4f':a[1]==='deleted'?'#b23b2c':'#d8d2c4';
+      const dash=a[1]==='active'?'':'2,2';
+      return '<line x1="'+a[0].toFixed(1)+'" y1="10" x2="'+p[0].toFixed(1)+'" y2="10" stroke="'+col+'" stroke-width="2.4" stroke-dasharray="'+dash+'"/>';}).join('');
+    const ltd=document.createElement('td');ltd.innerHTML='<svg width="'+W+'" height="'+H+'">'+segs+'</svg>';tr.appendChild(ltd);
+    const idtd=document.createElement('td');idtd.innerHTML='<span class="statval">'+r.id+'</span>';tr.appendChild(idtd);
+    COLS.forEach(c=>{
+      const h=r.cells[c];const cur=h.length?h[h.length-1]:null;const prevE=h.length>1?h[h.length-2]:null;
+      const td=document.createElement('td');
+      const isVol=topVol.has(r.id+'|'+c);if(isVol)td.className='volatile';
+      let ghost='';
+      if(prevE){const a=parseFloat(prevE.v),b=parseFloat(cur.v);
+        if(!isNaN(a)&&!isNaN(b)){const dir=b>a?'up':b<a?'down':'';const arr=b>a?'↑':b<a?'↓':'→';
+          ghost='<span class="ghostsub '+dir+'">'+arr+' was '+prevE.v+'</span>';}
+        else ghost='<span class="ghostsub">was '+prevE.v+'</span>';}
+      td.innerHTML='<span class="statval">'+(cur?cur.v:'ø')+'</span>'+ghost+(isVol?'<span class="pulsering"></span>':'');
+      tr.appendChild(td);
+    });
+    t.appendChild(tr);
+  });
+  const co=document.getElementById('callouts');
+  co.innerHTML='<b>Most volatile cells in window:</b>'+cellVol.slice(0,3).map(x=>{
+    const first=x.h[0].v,last=x.h[x.h.length-1].v;
+    return '<div class="co"><b>'+x.id+' · '+x.c+'</b> changed '+x.n+'× — '+first+' → '+last+'</div>';}).join('');
+}
+
+/* ============ MODE TOGGLE ============ */
+const iv=document.getElementById('interactiveView'),sv=document.getElementById('staticView');
+const mI=document.getElementById('mInteractive'),mS=document.getElementById('mStatic');
+mI.onclick=()=>{iv.style.display='block';sv.classList.remove('show');mI.classList.add('on');mS.classList.remove('on');};
+mS.onclick=()=>{iv.style.display='none';sv.classList.add('show');mS.classList.add('on');mI.classList.remove('on');};
+
+/* ============ INIT ============ */
+buildStatic();
+render(TOTAL,false);
+</script>
+</body>
+</html>

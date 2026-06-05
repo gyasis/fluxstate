@@ -57,3 +57,6 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+
+# Stray research artifact (Gemini MCP)
+deep_research.db
