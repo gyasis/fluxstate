@@ -205,10 +205,14 @@ class FluxState:
         # Identify rows that exist in the mirror table but not in the main table
         mirror_ids = set(self.mirror_table[self.key_column])
         main_ids = set(self.table[self.key_column].to_list())
-        
+
+        # O(1) key -> row-index map; replaces list.index() inside the row loop
+        # (which made update_mirror_table O(rows^2)). Kept in sync as new rows append.
+        id_to_index = {key: i for i, key in enumerate(self.mirror_table[self.key_column])}
+
         # Handle deleted rows
         for id_ in mirror_ids - main_ids:
-            index = self.mirror_table[self.key_column].index(id_)
+            index = id_to_index[id_]
             for col in self.table.columns:
                 if col == self.key_column:
                     continue
@@ -228,6 +232,7 @@ class FluxState:
             if id_ not in mirror_ids:
                 # New row
                 self.mirror_table[self.key_column].append(id_)
+                id_to_index[id_] = len(self.mirror_table[self.key_column]) - 1
                 for col in self.table.columns:
                     if col == self.key_column:
                         continue
@@ -250,7 +255,7 @@ class FluxState:
                 logging.info(f"New row added for ID {id_}.")
             else:
                 # Existing row
-                index = self.mirror_table[self.key_column].index(id_)
+                index = id_to_index[id_]
                 for col in self.table.columns:
                     if col == self.key_column:
                         continue
