@@ -45,6 +45,8 @@ htmlcov/
 *.json
 !pyproject.json
 !mirror_table_log.json
+# Spec deliverables are NOT data output — keep contracts/schemas tracked
+!specs/**/*.json
 
 # Snowflake credentials
 *.credentials
