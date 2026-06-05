@@ -47,6 +47,9 @@ htmlcov/
 !mirror_table_log.json
 # Spec deliverables are NOT data output — keep contracts/schemas tracked
 !specs/**/*.json
+# SpecKit spec definition (.specify/) is a tracked deliverable, incl. its config.
+# (Agent RUNTIME dot-folders — .claude/*.json, .devkid/, .dk/ — stay ignored.)
+!.specify/**/*.json
 
 # Snowflake credentials
 *.credentials
@@ -62,3 +65,9 @@ Thumbs.db
 
 # Stray research artifact (Gemini MCP)
 deep_research.db
+
+# Agent runtime state (machine-local; generated). Source config lives in
+# tracked files (dev-kid.yml, .specify/). These hold absolute paths / live state.
+.devkid/
+.dk/
+execution_plan.json
