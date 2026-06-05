@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxState · Audit Render (daff-style highlighter) — mock</title>
+<style>
+  :root{
+    --ink:#1c1c1c; --paper:#fcfbf8; --line:#dcd6c8; --mut:#6c655a;
+    --add:#2e7d4f; --addbg:#e7f3ea; --del:#b23b2c; --delbg:#fbe9e6;
+    --mod:#9a6b12; --modbg:#fdf3df; --col:#2e5d7d; --colbg:#e8f0f5;
+    --chip:#efece4;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#e9e6df;color:var(--ink);
+    font-family:"Iowan Old Style","Palatino Linotype",Georgia,serif;line-height:1.45}
+  .sheet{max-width:1040px;margin:24px auto;background:var(--paper);
+    padding:34px 42px 42px;border:1px solid var(--line);
+    box-shadow:0 1px 0 #fff inset,0 8px 30px rgba(0,0,0,.12)}
+  h1{font-size:25px;margin:0 0 2px;letter-spacing:-.3px}
+  .sub{color:var(--mut);font-size:12.5px;margin:0;font-style:italic}
+  .rule{height:2px;background:var(--ink);margin:13px 0 16px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:1.5px;margin:22px 0 8px;
+    border-bottom:1px solid var(--line);padding-bottom:5px;color:var(--ink)}
+  p{margin:0 0 9px;font-size:13.5px}
+  .legend{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 4px}
+  .lg{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--mut);
+    border:1px solid var(--line);background:#fff;padding:3px 9px;border-radius:4px}
+  .sw{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.15)}
+  .sw.add{background:var(--addbg)} .sw.del{background:var(--delbg)}
+  .sw.mod{background:var(--modbg)} .sw.col{background:var(--colbg)}
+  /* diff table */
+  table.diff{width:100%;border-collapse:collapse;font-size:12.5px;margin:4px 0 6px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace}
+  table.diff th,table.diff td{border:1px solid var(--line);padding:5px 9px;text-align:left;white-space:nowrap}
+  table.diff th{background:#f2efe7;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut)}
+  .ann{width:34px;text-align:center !important;font-weight:700;color:var(--mut);background:#f6f3ec}
+  tr.r-add td{background:var(--addbg)} tr.r-add .ann{color:var(--add);background:#daeede}
+  tr.r-del td{background:var(--delbg);text-decoration:line-through;color:#8a4a3f} tr.r-del .ann{color:var(--del);background:#f5dcd7;text-decoration:none}
+  td.cell-mod{background:var(--modbg)}
+  .old{color:var(--del);text-decoration:line-through;opacity:.8}
+  .arr{color:var(--mut);padding:0 4px}
+  .new{color:var(--add);font-weight:600}
+  th.col-add{background:var(--colbg);color:var(--col)} td.col-add{background:var(--colbg)}
+  .colflag{font-size:9px;color:var(--col);font-weight:700;display:block;letter-spacing:.5px}
+  /* timeline */
+  .tl-wrap{background:#fff;border:1px solid var(--line);padding:14px 16px;margin:6px 0}
+  .tl-head{font-size:12.5px;margin:0 0 10px}
+  .tl-head b{font-family:ui-monospace,Menlo,monospace}
+  .tl{position:relative;margin:0 0 4px;padding-left:6px}
+  .tl-row{display:grid;grid-template-columns:96px 1fr;gap:12px;align-items:start;
+    padding:6px 0;border-top:1px dashed var(--line)}
+  .tl-row:first-child{border-top:none}
+  .tl-date{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--mut);padding-top:2px}
+  .tl-ev{font-size:13px;display:flex;align-items:center;gap:8px}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .dot.set{background:var(--add)} .dot.chg{background:var(--mod)} .dot.del{background:var(--del)} .dot.res{background:var(--col)}
+  .pill{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;border-radius:3px;padding:1px 7px;border:1px solid}
+  .pill.set{background:var(--addbg);border-color:#bcdcc6;color:var(--add)}
+  .pill.chg{background:var(--modbg);border-color:#ecd6a6;color:var(--mod)}
+  .pill.del{background:var(--delbg);border-color:#eecabf;color:var(--del)}
+  .pill.res{background:var(--colbg);border-color:#bcd2e0;color:var(--col)}
+  .note{font-size:12.5px;color:var(--mut);font-style:italic}
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  .json{font-family:ui-monospace,Menlo,monospace;font-size:11px;background:#1c1c1c;color:#e8e4da;
+    padding:11px 13px;border-radius:5px;overflow:auto;line-height:1.55;white-space:pre}
+  .jk{color:#9fc6e0}.jv{color:#cbe6b6}.jd{color:#d8b673}
+  .callout{background:var(--colbg);border-left:3px solid var(--col);padding:9px 13px;font-size:13px;margin:10px 0}
+  .foot{margin-top:22px;border-top:2px solid var(--ink);padding-top:9px;font-size:11px;color:var(--mut);
+    display:flex;justify-content:space-between}
+  @media print{body{background:#fff}.sheet{box-shadow:none;border:none;margin:0;max-width:none}}
+  @media(max-width:720px){.cols2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <h1>HCC Audit Render — <span style="color:var(--mut)">daff-style highlighter</span></h1>
+  <p class="sub">Mock of FluxState's <code>generate_audit_bundle()</code> output · snapshot 2026-05-01 → 2026-06-01 · self-contained, hand to a compliance officer</p>
+  <div class="rule"></div>
+
+  <p>This is what a <b>daff highlighter diff</b> looks like, rendered for a human auditor: two snapshots aligned, with <b>added rows</b>, <b>removed rows</b>, <b>changed cells</b>, and <b>added columns</b> color-coded. The annotation column on the left is daff's native marker (<code>+++</code> add · <code>---</code> remove · <code>→</code> modify).</p>
+
+  <div class="legend">
+    <span class="lg"><span class="sw mod"></span> cell changed <code>old&nbsp;→&nbsp;new</code></span>
+    <span class="lg"><span class="sw add"></span> row added <code>+++</code></span>
+    <span class="lg"><span class="sw del"></span> row removed <code>---</code></span>
+    <span class="lg"><span class="sw col"></span> column added</span>
+  </div>
+
+  <h2>Table diff — PATIENT_HCC (keyed on PATIENT_ID)</h2>
+  <table class="diff">
+    <tr>
+      <th class="ann">·</th>
+      <th>PATIENT_ID</th>
+      <th>HCC_CODE</th>
+      <th>HCC_STATUS</th>
+      <th>RAF_SCORE</th>
+      <th class="col-add">ICD_10_CODE<span class="colflag">+++ new col</span></th>
+    </tr>
+    <tr>
+      <td class="ann">→</td>
+      <td>P-1001</td><td>HCC-19</td>
+      <td class="cell-mod"><span class="old">Pending</span><span class="arr">→</span><span class="new">Billed</span></td>
+      <td class="cell-mod"><span class="old">0.318</span><span class="arr">→</span><span class="new">0.452</span></td>
+      <td class="col-add">E11.9</td>
+    </tr>
+    <tr>
+      <td class="ann">&nbsp;</td>
+      <td>P-1002</td><td>HCC-85</td><td>Resolved</td><td>0.291</td>
+      <td class="col-add">I50.9</td>
+    </tr>
+    <tr class="r-del">
+      <td class="ann">---</td>
+      <td>P-1003</td><td>HCC-18</td><td>Disputed</td><td>0.504</td>
+      <td>—</td>
+    </tr>
+    <tr class="r-add">
+      <td class="ann">+++</td>
+      <td>P-1004</td><td>HCC-22</td><td>Pending</td><td>0.211</td>
+      <td class="col-add">N18.4</td>
+    </tr>
+    <tr class="r-add">
+      <td class="ann">+++</td>
+      <td>P-1001</td><td>HCC-40</td><td>Pending</td><td>0.137</td>
+      <td class="col-add">E78.5</td>
+    </tr>
+  </table>
+  <p class="note">Two-table diff only — it shows <b>what changed between these two snapshots</b>. It does <b>not</b> know that P-1003 was deleted-then-restored, or what P-1001's status was three months ago. That cross-time memory is the next panel.</p>
+
+  <h2>Where FluxState goes beyond daff — the cross-time timeline</h2>
+  <div class="callout"><b>daff aligns two tables. FluxState remembers all of them.</b> Below is the per-cell history a 2-table diff can never produce — including the <b>resurrection</b> of a row that vanished and came back, stitched under one <code>PATIENT_ID</code>.</div>
+
+  <div class="cols2">
+    <div class="tl-wrap">
+      <p class="tl-head"><b>P-1001 · HCC_STATUS</b> — full change history</p>
+      <div class="tl">
+        <div class="tl-row"><div class="tl-date">2026-01-15</div><div class="tl-ev"><span class="dot set"></span><span class="pill set">SET</span> Pending</div></div>
+        <div class="tl-row"><div class="tl-date">2026-03-02</div><div class="tl-ev"><span class="dot chg"></span><span class="pill chg">CHANGE</span> Pending → Active</div></div>
+        <div class="tl-row"><div class="tl-date">2026-06-01</div><div class="tl-ev"><span class="dot chg"></span><span class="pill chg">CHANGE</span> Active → Billed</div></div>
+      </div>
+    </div>
+
+    <div class="tl-wrap">
+      <p class="tl-head"><b>P-1003 · row lifecycle</b> — the resurrection trail</p>
+      <div class="tl">
+        <div class="tl-row"><div class="tl-date">2026-01-20</div><div class="tl-ev"><span class="dot set"></span><span class="pill set">SET</span> Disputed</div></div>
+        <div class="tl-row"><div class="tl-date">2026-06-01</div><div class="tl-ev"><span class="dot del"></span><span class="pill del">__deleted__</span> dropped from source</div></div>
+        <div class="tl-row"><div class="tl-date">2026-08-12</div><div class="tl-ev"><span class="dot res"></span><span class="pill res">RESURRECTED</span> Active (same id)</div></div>
+      </div>
+      <p class="note" style="margin-top:8px">Same <code>entity_id</code> → one continuous trail: <b>Disputed → deleted → Active</b>. A fresh row in a snapshot diff would hide this.</p>
+    </div>
+  </div>
+
+  <h2>The underlying record (reconstructed on demand, never stored as JSON-in-cell)</h2>
+  <div class="json"><span class="jk">get_timeline</span>(<span class="jv">"P-1003"</span>, field=<span class="jv">"HCC_STATUS"</span>) →
+[
+  { <span class="jk">"date"</span>: <span class="jd">"2026-01-20"</span>, <span class="jk">"value"</span>: <span class="jv">"Disputed"</span> },
+  { <span class="jk">"date"</span>: <span class="jd">"2026-06-01"</span>, <span class="jk">"value"</span>: <span class="jv">null</span>, <span class="jk">"event"</span>: <span class="jv">"__deleted__"</span> },
+  { <span class="jk">"date"</span>: <span class="jd">"2026-08-12"</span>, <span class="jk">"value"</span>: <span class="jv">"Active"</span>, <span class="jk">"event"</span>: <span class="jv">"resurrected"</span> }
+]</div>
+
+  <div class="foot">
+    <span>Render engine: daff <code>DiffRender().html()</code> (optional import) · history: FluxState change-log (Polars, keyed by entity_id)</span>
+    <span>Mock · sample HCC data · 2026-06-05</span>
+  </div>
+
+</div>
+</body>
+</html>

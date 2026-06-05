@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FluxState · 5,000-row stress test — virtualized + filterable</title>
+<style>
+:root{
+  --paper:#fbfaf7; --card:#ffffff; --ink:#1c1c1c; --line:#dcd6c8; --mut:#6c655a; --dim:#a39c8c;
+  --add:#2e7d4f; --addbg:#e7f3ea; --del:#b23b2c; --delbg:#fbe9e6;
+  --mod:#9a6b12; --modbg:#fdf3df; --col:#2e5d7d; --colbg:#e8f0f5;
+  --accent:#2e5d7d; --chip:#efece4;
+  --heat1:rgba(46,93,125,.07); --heat2:rgba(154,107,18,.13);
+  --heat3:rgba(154,107,18,.24); --heat4:rgba(178,59,44,.20);
+  --serif:"Iowan Old Style","Palatino Linotype",Georgia,serif;
+  --sans:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#e9e6df;color:var(--ink);font-family:var(--sans);font-size:14px}
+.wrap{max-width:1280px;margin:18px auto;background:var(--paper);border:1px solid var(--line);
+  box-shadow:0 8px 30px rgba(0,0,0,.12);padding:20px 24px 28px}
+header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:10px}
+h1{font-family:var(--serif);font-size:21px;margin:0;letter-spacing:-.3px}
+h1 .gh{color:var(--mut);font-weight:400}
+.tagline{color:var(--mut);font-size:12px;font-style:italic}
+.perf{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--mut);background:var(--chip);
+  border:1px solid var(--line);border-radius:6px;padding:4px 9px}
+.perf b{color:var(--add)}
+
+/* time control (capsule scrubber) */
+.timewrap{margin:14px 0 10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.tctl{display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap}
+.play{width:26px;height:26px;border-radius:50%;border:1px solid var(--accent);background:var(--accent);
+  color:#fff;font-size:9.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;padding:0}
+.stepb{width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:var(--chip);
+  color:var(--ink);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;padding:0}
+.stepb:hover{background:#e6e2d8}
+.asof{font-family:var(--mono);font-size:13px;font-weight:600;background:var(--chip);
+  border:1px solid var(--line);border-radius:6px;padding:4px 10px}
+.asof .lbl{color:var(--mut);font-weight:400;font-size:10px;margin-right:6px;text-transform:uppercase;letter-spacing:1px;font-family:var(--sans)}
+.hint{color:var(--dim);font-size:11px;margin-left:auto}
+kbd{background:#fff;border:1px solid var(--line);border-radius:4px;padding:0 5px;font-size:10.5px;color:var(--mut);font-family:var(--mono)}
+.histo{position:relative;height:20px}
+.track{position:absolute;inset:0;border-radius:10px;border:1px solid var(--line);background:#efece4;overflow:hidden;box-shadow:inset 0 1px 2px rgba(0,0,0,.07)}
+.bars{position:absolute;inset:0;display:flex}
+.bar{flex:1;height:100%;background:var(--col)}
+.fill{position:absolute;top:0;bottom:0;left:0;width:100%;background:rgba(46,93,125,.15);z-index:1}
+.ticks{position:relative;height:13px;margin-top:4px}
+.axis{position:absolute;bottom:0;font-size:9.5px;color:var(--dim);transform:translateX(-50%);font-family:var(--mono)}
+.playhead{position:absolute;top:50%;transform:translate(-50%,-50%);width:16px;height:16px;border-radius:50%;
+  background:#fff;border:2.5px solid var(--del);box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:none;z-index:5}
+#scrub{position:absolute;top:-4px;left:0;width:100%;height:28px;margin:0;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer;z-index:6}
+#scrub::-webkit-slider-runnable-track{height:28px;background:transparent}
+#scrub::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:28px;background:transparent;cursor:grab}
+#scrub::-moz-range-track{height:28px;background:transparent}
+#scrub::-moz-range-thumb{width:18px;height:28px;background:transparent;border:none;cursor:grab}
+
+/* layout */
+.layout{display:flex;gap:14px;margin-top:12px}
+.sidebar{width:248px;flex:none;background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:14px;transition:width .2s,padding .2s,opacity .15s;overflow:hidden}
+.layout.collapsed .sidebar{width:0;padding:14px 0;opacity:0;border-color:transparent}
+.sbtitle{display:flex;align-items:center;justify-content:space-between;font-size:11px;text-transform:uppercase;
+  letter-spacing:1px;color:var(--mut);font-weight:700;margin-bottom:10px}
+.ftog{display:flex;gap:4px;margin-bottom:12px}
+.ftog button{flex:1;font-size:11px;padding:5px;border:1px solid var(--line);background:var(--chip);color:var(--mut);border-radius:6px;cursor:pointer}
+.ftog button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.fld{margin-bottom:11px}
+.fld label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin-bottom:3px}
+.fld select,.fld input,.fld textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:5px 7px;
+  font-size:12px;font-family:var(--mono);background:#fff;color:var(--ink)}
+.fld textarea{height:88px;resize:vertical;line-height:1.5}
+.rangepair{display:flex;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px}
+.chip-b{font-size:10.5px;border:1px solid var(--line);background:var(--chip);color:var(--mut);border-radius:999px;padding:2px 9px;cursor:pointer}
+.chip-b:hover{background:#e6e2d8}
+.applybar{display:flex;gap:6px;margin-top:6px}
+.applybar button{flex:1;font-size:12px;padding:7px;border-radius:7px;cursor:pointer;border:1px solid var(--accent)}
+#applyBtn{background:var(--accent);color:#fff}
+#clearBtn{background:#fff;color:var(--mut);border-color:var(--line)}
+.ferr{color:var(--del);font-size:11px;margin-top:6px;font-family:var(--mono);display:none}
+.sqlhelp{font-size:10.5px;color:var(--dim);margin-top:6px;line-height:1.5}
+.sqlhelp code{background:var(--chip);padding:0 3px;border-radius:3px}
+
+/* main */
+.main{flex:1;min-width:0}
+.toolbar{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.collapseBtn{border:1px solid var(--line);background:var(--chip);border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}
+.count{font-size:12.5px;color:var(--mut)}
+.count b{color:var(--ink);font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-left:auto;font-size:11px;color:var(--mut)}
+.legend .li{display:flex;align-items:center;gap:5px}
+.sw{width:13px;height:13px;border-radius:3px;border:1px solid rgba(0,0,0,.12)}
+.sw.h{background:var(--heat3)}.sw.c{background:rgba(251,191,36,.45)}
+.sw.d{background:repeating-linear-gradient(45deg,#fbe9e6,#fbe9e6 4px,#f5dcd7 4px,#f5dcd7 8px)}
+.sw.r{box-shadow:inset 3px 0 0 var(--add);background:#fff}
+
+/* virtualized grid */
+.gridhead,.vrow{display:grid;grid-template-columns:48px 92px repeat(5,minmax(90px,1fr));align-items:center}
+.gridhead{background:#f2efe7;border:1px solid var(--line);border-bottom:none;border-radius:10px 10px 0 0;
+  position:sticky;top:0;z-index:3}
+.gridhead .h{padding:8px 10px;font-size:10px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);font-weight:600;white-space:nowrap}
+.scroller{height:540px;overflow:auto;border:1px solid var(--line);border-top:none;border-radius:0 0 10px 10px;background:var(--card)}
+.sizer{position:relative;width:100%}
+.vrow{position:absolute;left:0;right:0;height:30px;border-bottom:1px solid #efece4}
+.vc{padding:0 10px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-family:var(--mono);font-size:12px;height:30px;line-height:30px;cursor:pointer}
+.vc.v1{background:var(--heat1)}.vc.v2{background:var(--heat2)}.vc.v3{background:var(--heat3)}.vc.v4{background:var(--heat4)}
+.vc.gut{color:var(--mut);text-align:center;font-size:11px}
+.vc.gut b{color:var(--mod)}
+.vc.idc{color:#3a4350;font-weight:600}
+.vc.idc .ph{color:var(--add);font-size:11px}
+.vc.changed{background:rgba(251,191,36,.32)}
+.d-old{color:var(--del);text-decoration:line-through;opacity:.85}
+.d-arr{color:var(--mut);padding:0 4px}
+.d-new{color:var(--add);font-weight:700}
+.vrow.deleted .vc{background:repeating-linear-gradient(45deg,#fbe9e6,#fbe9e6 9px,#f5dcd7 9px,#f5dcd7 18px);color:#8a4a3f}
+.vrow.deleted .vc:not(.idc):not(.gut){text-decoration:line-through}
+.vrow.deleted .vc.idc{color:var(--del)}
+.vrow.unborn{opacity:.25}
+.vrow.resurrected{box-shadow:inset 3px 0 0 var(--add)}
+.void{color:var(--dim)}
+.vc.pinned{outline:2px solid var(--mod);outline-offset:-2px}
+
+/* inspector */
+.inspector{position:fixed;right:18px;bottom:18px;width:300px;background:var(--card);border:1px solid var(--mod);
+  border-radius:12px;box-shadow:0 18px 50px rgba(0,0,0,.25);z-index:40;display:none;overflow:hidden}
+.inspector.show{display:block}
+.ihead{background:#f2efe7;padding:10px 13px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--line)}
+.ihead .it{font-weight:700;font-size:13px;font-family:var(--mono)}.ihead .is{color:var(--mut);font-size:11px}
+.iclose{background:none;border:none;color:var(--mut);font-size:17px;cursor:pointer;line-height:1}
+.ibody{padding:12px 13px;max-height:300px;overflow:auto}
+.ievent{display:grid;grid-template-columns:14px 78px 1fr;gap:8px;align-items:center;padding:4px 0;border-top:1px solid var(--line);font-size:12px}
+.ievent:first-child{border-top:none}
+.idot{width:9px;height:9px;border-radius:50%;background:var(--col)}
+.idot.del{background:var(--del)}.idot.res{background:var(--add)}.idot.now{box-shadow:0 0 0 3px rgba(46,93,125,.22)}
+.ievent .id{color:var(--dim);font-family:var(--mono);font-size:11px}
+.ievent .iv{font-family:var(--mono)}.ievent.future{opacity:.4}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>FluxState <span class="gh">· 5,000-row stress test</span></h1>
+    <span class="tagline">virtualized window · delta-on-scrub · streamed-style filtering</span>
+    <span class="perf" id="perf">building…</span>
+  </header>
+
+  <div class="timewrap">
+    <div class="tctl">
+      <button class="play" id="playBtn" title="Play / pause">▶</button>
+      <button class="stepb" id="prevEv" title="Prev event">‹</button>
+      <button class="stepb" id="nextEv" title="Next event">›</button>
+      <button class="stepb" id="loopBtn" title="Loop playback">⟳</button>
+      <div class="asof"><span class="lbl">as of</span><span id="asofDate">—</span></div>
+      <div class="hint">drag the capsule · <kbd>←</kbd><kbd>→</kbd> step events · scroll the table — rows stream in</div>
+    </div>
+    <div class="histo" id="histo">
+      <div class="track"><div class="bars" id="bars"></div><div class="fill" id="fill"></div></div>
+      <div class="playhead" id="playhead"></div>
+      <input type="range" id="scrub" min="0" max="100" value="100" step="1">
+    </div>
+    <div class="ticks" id="ticks"></div>
+  </div>
+
+  <div class="layout" id="layout">
+    <aside class="sidebar" id="sidebar">
+      <div class="sbtitle"><span>Filter rows</span></div>
+      <div class="ftog">
+        <button id="tabSimple" class="on">Simple</button>
+        <button id="tabSql">Advanced · SQL</button>
+      </div>
+
+      <div id="simplePane">
+        <div class="chips">
+          <span class="chip-b" data-preset="critical">Critical now</span>
+          <span class="chip-b" data-preset="volatile">≥4 changes</span>
+          <span class="chip-b" data-preset="deleted">Ever deleted</span>
+          <span class="chip-b" data-preset="resurrected">Resurrected</span>
+        </div>
+        <div class="fld"><label>STATUS (now)</label><select id="fStatus"><option value="">— any —</option></select></div>
+        <div class="fld"><label>PCP assigned (now)</label><select id="fPcp"><option value="">— any —</option></select></div>
+        <div class="fld"><label>RISK_SCORE range (now)</label>
+          <div class="rangepair"><input id="fRiskMin" placeholder="min" inputmode="decimal"><input id="fRiskMax" placeholder="max" inputmode="decimal"></div></div>
+        <div class="fld"><label>Min # changes (volatility)</label><input id="fChanges" placeholder="e.g. 6" inputmode="numeric"></div>
+        <div class="fld"><label>ID contains</label><input id="fId" placeholder="e.g. P-004"></div>
+      </div>
+
+      <div id="sqlPane" style="display:none">
+        <div class="fld"><label>WHERE expression</label>
+          <textarea id="fSql" placeholder="RISK_SCORE > 1.8 AND STATUS = 'Critical'"></textarea></div>
+        <div class="sqlhelp">
+          Columns: <code>RISK_SCORE</code> <code>HCC_CODE</code> <code>PCP_ASSIGNED</code> <code>STATUS</code> <code>LAST_VISIT</code><br>
+          Meta: <code>changes</code> <code>deleted</code> <code>resurrected</code> <code>id</code><br>
+          Ops: <code>= != &lt; &gt; &lt;= &gt;=</code> <code>AND</code> <code>OR</code> <code>LIKE 'x%'</code> · strings in <code>'quotes'</code><br>
+          Evaluated on each row's <i>as-of-now</i> values.
+        </div>
+        <div class="ferr" id="sqlErr"></div>
+      </div>
+
+      <div class="applybar"><button id="applyBtn">Apply</button><button id="clearBtn">Clear</button></div>
+    </aside>
+
+    <div class="main">
+      <div class="toolbar">
+        <button class="collapseBtn" id="collapseBtn">⮜ filters</button>
+        <span class="count" id="count">—</span>
+        <div class="legend">
+          <span class="li"><span class="sw h"></span> change-heat</span>
+          <span class="li"><span class="sw c"></span> changed this step</span>
+          <span class="li"><span class="sw d"></span> deleted</span>
+          <span class="li"><span class="sw r"></span> resurrected</span>
+        </div>
+      </div>
+      <div class="gridhead" id="gridhead"></div>
+      <div class="scroller" id="scroller"><div class="sizer" id="sizer"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="inspector" id="inspector">
+  <div class="ihead"><div><div class="it" id="iTitle">—</div><div class="is" id="iSub">—</div></div><button class="iclose" id="iClose">×</button></div>
+  <div class="ibody"><div id="iEvents"></div></div>
+</div>
+
+<script>
+/* ============ SETUP ============ */
+const START='2026-01-01', END='2026-06-30';
+const di=d=>Math.round((new Date(d)-new Date(START))/86400000);
+const TOTAL=di(END);
+const fmt=t=>{const dt=new Date(new Date(START).getTime()+t*86400000);
+  return dt.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});};
+const COLS=['RISK_SCORE','HCC_CODE','PCP_ASSIGNED','STATUS','LAST_VISIT'];
+const N=5000;
+const EVD=['2026-01-05','2026-01-20','2026-02-10','2026-02-28','2026-03-15','2026-04-02','2026-04-20','2026-05-08','2026-05-25','2026-06-10'];
+const STAT=['Stable','Watch','Critical','Pending','Billed','Resolved','Disputed','Active'];
+const PCP=['Dr. Vance','Dr. Okafor','Dr. Lindt','Dr. Mehta','Dr. Adeyemi','Dr. Park'];
+const HCC=['HCC-22','HCC-85','HCC-18','HCC-40','HCC-12','HCC-19','HCC-55','HCC-31'];
+const ri=a=>a[Math.floor(Math.random()*a.length)];
+
+/* ============ GENERATE 5,000 ROWS ============ */
+const t0=performance.now();
+const RAW=[];
+for(let n=1;n<=N;n++){
+  const id='P-'+String(n).padStart(5,'0');
+  const bornLater=Math.random()<0.07;
+  const startI=bornLater?1+Math.floor(Math.random()*5):0;
+  const bornDate=bornLater?EVD[startI]:'2026-01-01';
+  function dates(maxExtra){
+    const out=[]; let k=startI; const extra=Math.floor(Math.random()*maxExtra);
+    for(let j=0;j<extra;j++){k+=1+Math.floor(Math.random()*2);if(k<EVD.length)out.push(EVD[k]);else break;}
+    return [...new Set([bornDate,...out])];
+  }
+  let rv=+(0.4+Math.random()*2.1).toFixed(2);
+  const RISK=dates(5).map((d,j)=>{if(j>0)rv=Math.max(0.1,+(rv+(Math.random()-0.45)*0.55).toFixed(2));return [d,rv];});
+  let sv=ri(STAT); const STATUS=dates(3).map((d,j)=>{if(j>0)sv=ri(STAT);return [d,sv];});
+  let pv=ri(PCP); const PCP_ASSIGNED=dates(2).map((d,j)=>{if(j>0)pv=ri(PCP);return [d,pv];});
+  let codes=ri(HCC); const HCC_CODE=dates(2).map((d,j)=>{if(j>0&&Math.random()<0.7)codes=codes+', '+ri(HCC);return [d,codes];});
+  const LAST_VISIT=RISK.map(([d])=>[d,d]);
+  let life=[[bornDate,'active']];
+  if(Math.random()<0.03){
+    const delI=startI+2+Math.floor(Math.random()*3);
+    if(delI<EVD.length){life.push([EVD[delI],'deleted']);
+      if(Math.random()<0.45){const resI=Math.min(EVD.length-1,delI+1+Math.floor(Math.random()*2));life.push([EVD[resI],'active']);}}
+  }
+  RAW.push({id,life,cells:{RISK_SCORE:RISK,HCC_CODE,PCP_ASSIGNED,STATUS,LAST_VISIT}});
+}
+const ROWS=RAW.map(r=>({
+  id:r.id,
+  life:r.life.map(([d,s])=>({t:di(d),date:d,state:s})).sort((a,b)=>a.t-b.t),
+  cells:Object.fromEntries(COLS.map(c=>[c,r.cells[c].map(([d,v])=>({t:di(d),date:d,v})).sort((a,b)=>a.t-b.t)]))
+}));
+const genMs=Math.round(performance.now()-t0);
+
+/* ============ LOGIC ============ */
+function asOf(h,T){let m=null;for(const e of h){if(e.t<=T)m=e;else break;}return m;}
+function rowState(row,T){
+  if(!row.life.length||row.life[0].t>T)return{state:'unborn',resurrected:false};
+  let cur=row.life[0],hadDel=false;
+  for(const e of row.life){if(e.t<=T){if(e.state==='deleted')hadDel=true;cur=e;}else break;}
+  return{state:cur.state,resurrected:cur.state==='active'&&hadDel};
+}
+function changeCount(row){return COLS.reduce((n,c)=>n+row.cells[c].length,0);}
+function volClass(n){return n>=10?'v4':n>=7?'v3':n>=4?'v2':n>=1?'v1':'';}
+function esc(s){return String(s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+// per-row "as-of-now" view for filtering (latest values + meta)
+function rowView(row){
+  const v={id:row.id};
+  COLS.forEach(c=>{const m=row.cells[c];let val=m.length?m[m.length-1].v:null;
+    const num=parseFloat(val); v[c]=isNaN(num)?val:num;});
+  v.changes=changeCount(row);
+  v.deleted=row.life.some(l=>l.state==='deleted');
+  v.resurrected=row.life.length>2&&row.life.some(l=>l.state==='deleted')&&row.life[row.life.length-1].state==='active';
+  return v;
+}
+const VIEWS=ROWS.map(rowView);
+
+/* ============ HISTOGRAM ============ */
+const EVENTS=[];
+ROWS.forEach(r=>{COLS.forEach(c=>r.cells[c].forEach(e=>EVENTS.push(e.t)));
+  r.life.forEach(e=>{if(e.state!=='active'||e.t>0)EVENTS.push(e.t);});});
+const SNAPS=[...new Set(EVD.map(di).concat(ROWS.flatMap(r=>r.life.map(l=>l.t))))].sort((a,b)=>a-b).filter(t=>t>=0);
+const NB=40,bucket=new Array(NB).fill(0);
+EVENTS.forEach(t=>{bucket[Math.min(NB-1,Math.floor(t/(TOTAL+1)*NB))]++;});
+const maxB=Math.max(...bucket),bars=document.getElementById('bars');
+bucket.forEach(c=>{const d=document.createElement('div');d.className='bar';d.style.opacity=c?(.16+.72*c/maxB):0;bars.appendChild(d);});
+['2026-01-01','2026-03-01','2026-05-01','2026-06-30'].forEach(d=>{const a=document.createElement('div');a.className='axis';
+  a.style.left=(di(d)/TOTAL*100)+'%';a.textContent=new Date(d).toLocaleDateString('en-US',{month:'short'});document.getElementById('ticks').appendChild(a);});
+
+/* ============ FILTER ============ */
+let view=ROWS.map((_,i)=>i);   // indices passing filter
+function buildSelect(id,vals){const s=document.getElementById(id);[...new Set(vals)].sort().forEach(v=>{
+  const o=document.createElement('option');o.value=v;o.textContent=v;s.appendChild(o);});}
+buildSelect('fStatus',VIEWS.map(v=>v.STATUS));
+buildSelect('fPcp',VIEWS.map(v=>v.PCP_ASSIGNED));
+
+function sqlToFn(expr){
+  let s=expr.trim(); if(!s)return ()=>true;
+  // LIKE 'x%'  -> startsWith ;  LIKE '%x' -> endsWith ; LIKE '%x%' -> includes
+  s=s.replace(/(\w+)\s+LIKE\s+'([^']*)'/gi,(m,col,pat)=>{
+    if(pat.startsWith('%')&&pat.endsWith('%'))return `String(r.${col}).includes('${pat.slice(1,-1)}')`;
+    if(pat.endsWith('%'))return `String(r.${col}).startsWith('${pat.slice(0,-1)}')`;
+    if(pat.startsWith('%'))return `String(r.${col}).endsWith('${pat.slice(1)}')`;
+    return `String(r.${col})==='${pat}'`;});
+  s=s.replace(/<=/g,'@LE@').replace(/>=/g,'@GE@').replace(/!=/g,'@NE@').replace(/<>/g,'@NE@');
+  s=s.replace(/=/g,'==').replace(/@LE@/g,'<=').replace(/@GE@/g,'>=').replace(/@NE@/g,'!=');
+  s=s.replace(/\bAND\b/gi,'&&').replace(/\bOR\b/gi,'||');
+  ['changes','deleted','resurrected','id',...COLS].forEach(name=>{
+    s=s.replace(new RegExp('\\b'+name+'\\b','g'),'r.'+name);});
+  s=s.replace(/r\.r\./g,'r.');
+  return new Function('r','return ('+s+');');
+}
+let mode='simple';
+function applyFilter(){
+  const t=performance.now();
+  let pred=()=>true;
+  if(mode==='sql'){
+    const expr=document.getElementById('fSql').value;
+    try{const fn=sqlToFn(expr);fn(VIEWS[0]);pred=fn;document.getElementById('sqlErr').style.display='none';}
+    catch(err){document.getElementById('sqlErr').textContent='⚠ '+err.message;document.getElementById('sqlErr').style.display='block';return;}
+  }else{
+    const st=document.getElementById('fStatus').value, pc=document.getElementById('fPcp').value;
+    const rmin=parseFloat(document.getElementById('fRiskMin').value), rmax=parseFloat(document.getElementById('fRiskMax').value);
+    const ch=parseInt(document.getElementById('fChanges').value), idq=document.getElementById('fId').value.trim().toUpperCase();
+    pred=v=>(!st||v.STATUS===st)&&(!pc||v.PCP_ASSIGNED===pc)
+      &&(isNaN(rmin)||+v.RISK_SCORE>=rmin)&&(isNaN(rmax)||+v.RISK_SCORE<=rmax)
+      &&(isNaN(ch)||v.changes>=ch)&&(!idq||v.id.includes(idq));
+  }
+  view=[]; for(let i=0;i<VIEWS.length;i++){if(pred(VIEWS[i]))view.push(i);}
+  const ms=Math.round(performance.now()-t);
+  document.getElementById('sizer').style.height=(view.length*ROWH)+'px';
+  document.getElementById('scroller').scrollTop=0;
+  updateCount(ms);
+  renderWindow();
+}
+function updateCount(filterMs){
+  document.getElementById('count').innerHTML='Showing <b>'+view.length.toLocaleString()+'</b> of <b>'+N.toLocaleString()+'</b> rows'+
+    (filterMs!=null?' · filtered in '+filterMs+'ms':'');
+}
+document.getElementById('applyBtn').onclick=applyFilter;
+document.getElementById('clearBtn').onclick=()=>{
+  ['fStatus','fPcp'].forEach(id=>document.getElementById(id).value='');
+  ['fRiskMin','fRiskMax','fChanges','fId','fSql'].forEach(id=>document.getElementById(id).value='');
+  applyFilter();
+};
+document.querySelectorAll('.chip-b').forEach(c=>c.onclick=()=>{
+  const p=c.dataset.preset;mode='sql';switchTab();
+  document.getElementById('fSql').value=
+    p==='critical'?"STATUS = 'Critical'":
+    p==='volatile'?"changes >= 4":
+    p==='deleted'?"deleted = true":"resurrected = true";
+  applyFilter();
+});
+function switchTab(){
+  document.getElementById('tabSimple').classList.toggle('on',mode==='simple');
+  document.getElementById('tabSql').classList.toggle('on',mode==='sql');
+  document.getElementById('simplePane').style.display=mode==='simple'?'block':'none';
+  document.getElementById('sqlPane').style.display=mode==='sql'?'block':'none';
+}
+document.getElementById('tabSimple').onclick=()=>{mode='simple';switchTab();};
+document.getElementById('tabSql').onclick=()=>{mode='sql';switchTab();};
+document.getElementById('fSql').addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)){e.preventDefault();applyFilter();}});
+
+/* ============ VIRTUALIZED RENDER ============ */
+const ROWH=30,BUF=6;
+const scroller=document.getElementById('scroller'),sizer=document.getElementById('sizer');
+let curT=TOTAL,prevT=TOTAL,frames=0,lastPerf=0;
+document.getElementById('gridhead').innerHTML='<div class="h">Δ</div><div class="h">PATIENT_ID</div>'+COLS.map(c=>'<div class="h">'+c+'</div>').join('');
+sizer.style.height=(view.length*ROWH)+'px';
+
+function cellHtml(row,c,st){
+  if(st.state==='unborn')return '<div class="vc"><span class="void">·</span></div>';
+  const h=row.cells[c];
+  const nv=asOf(h,curT),newV=nv?nv.v:'ø';
+  const ov=asOf(h,prevT),oldV=ov?ov.v:'ø';
+  const wasBorn=rowState(row,prevT).state!=='unborn';
+  const changed=prevT!==curT&&wasBorn&&String(oldV)!==String(newV);
+  if(changed)return '<div class="vc changed" data-col="'+c+'"><span class="d-old">'+esc(oldV)+'</span><span class="d-arr">→</span><span class="d-new">'+esc(newV)+'</span></div>';
+  return '<div class="vc '+volClass(h.length)+'" data-col="'+c+'">'+esc(newV)+'</div>';
+}
+function renderWindow(){
+  const tp=performance.now();
+  const top=scroller.scrollTop,vis=Math.ceil(scroller.clientHeight/ROWH);
+  let s=Math.max(0,Math.floor(top/ROWH)-BUF), e=Math.min(view.length,s+vis+2*BUF);
+  let html='';
+  for(let i=s;i<e;i++){
+    const row=ROWS[view[i]],st=rowState(row,curT);
+    const cls='vrow'+(st.state==='deleted'?' deleted':st.state==='unborn'?' unborn':(st.resurrected?' resurrected':''));
+    let cells='<div class="vc gut"><b>'+changeCount(row)+'</b></div><div class="vc idc" data-col="__id">'+row.id+(st.resurrected?' <span class="ph">✦</span>':'')+'</div>';
+    for(const c of COLS)cells+=cellHtml(row,c,st);
+    html+='<div class="'+cls+'" data-ri="'+view[i]+'" style="top:'+(i*ROWH)+'px">'+cells+'</div>';
+  }
+  sizer.innerHTML=html;
+  lastPerf=performance.now()-tp;
+  document.getElementById('perf').innerHTML='5,000 rows gen <b>'+genMs+'ms</b> · window paint <b>'+lastPerf.toFixed(1)+'ms</b>';
+}
+let scr=null;
+scroller.addEventListener('scroll',()=>{if(scr)cancelAnimationFrame(scr);scr=requestAnimationFrame(renderWindow);});
+
+/* ============ TIME ============ */
+function updUI(){document.getElementById('asofDate').textContent=fmt(curT);
+  document.getElementById('playhead').style.left=(curT/TOTAL*100)+'%';
+  document.getElementById('fill').style.width=(curT/TOTAL*100)+'%';}
+function go(T){prevT=curT;curT=Math.max(0,Math.min(TOTAL,T));document.getElementById('scrub').value=curT;updUI();renderWindow();}
+const scrub=document.getElementById('scrub');scrub.max=TOTAL;scrub.value=TOTAL;
+let raf=null;
+scrub.addEventListener('input',()=>{const T=+scrub.value;if(raf)cancelAnimationFrame(raf);raf=requestAnimationFrame(()=>go(T));});
+document.addEventListener('keydown',e=>{
+  if(document.activeElement&&document.activeElement.tagName==='TEXTAREA')return;
+  if(e.key==='ArrowRight'){e.preventDefault();go(SNAPS.find(t=>t>curT)??TOTAL);}
+  if(e.key==='ArrowLeft'){e.preventDefault();go([...SNAPS].reverse().find(t=>t<curT)??0);}});
+document.getElementById('nextEv').onclick=()=>go(SNAPS.find(t=>t>curT)??TOTAL);
+document.getElementById('prevEv').onclick=()=>go([...SNAPS].reverse().find(t=>t<curT)??0);
+let LOOP=false;
+const loopBtn=document.getElementById('loopBtn');
+loopBtn.onclick=()=>{LOOP=!LOOP;loopBtn.classList.toggle('on',LOOP);};
+const playBtn=document.getElementById('playBtn');let timer=null;
+playBtn.onclick=()=>{if(timer){clearInterval(timer);timer=null;playBtn.textContent='▶';return;}
+  playBtn.textContent='⏸';if(curT>=TOTAL)go(0);let i=SNAPS.findIndex(t=>t>curT);if(i<0)i=0;
+  timer=setInterval(()=>{
+    if(i>=SNAPS.length){if(LOOP){i=0;go(0);return;}clearInterval(timer);timer=null;playBtn.textContent='▶';return;}
+    go(SNAPS[i]);i++;},850);};
+
+/* ============ COLLAPSE + INSPECT ============ */
+document.getElementById('collapseBtn').onclick=()=>{const l=document.getElementById('layout');
+  l.classList.toggle('collapsed');
+  document.getElementById('collapseBtn').textContent=l.classList.contains('collapsed')?'⮞ filters':'⮜ filters';
+  requestAnimationFrame(renderWindow);};
+sizer.addEventListener('click',e=>{
+  const cell=e.target.closest('.vc');if(!cell)return;const vrow=e.target.closest('.vrow');if(!vrow)return;
+  const col=cell.dataset.col;if(!col||col==='__id')return;
+  const row=ROWS[+vrow.dataset.ri];inspect(row,col);
+  sizer.querySelectorAll('.vc.pinned').forEach(x=>x.classList.remove('pinned'));cell.classList.add('pinned');
+});
+const inspector=document.getElementById('inspector');
+function inspect(row,c){
+  document.getElementById('iTitle').textContent=row.id+' · '+c;
+  document.getElementById('iSub').textContent=row.cells[c].length+' change events · '+changeCount(row)+' on row';
+  const life=row.life.filter(l=>!(l.state==='active'&&l.t===0));
+  let items=row.cells[c].map(e=>({t:e.t,date:e.date,v:e.v,kind:'set'}));
+  life.forEach(l=>items.push({t:l.t,date:l.date,v:l.state==='deleted'?'row deleted':'row resurrected',kind:l.state==='deleted'?'del':'res'}));
+  items.sort((a,b)=>a.t-b.t);
+  document.getElementById('iEvents').innerHTML=items.map(it=>
+    '<div class="ievent'+(it.t>curT?' future':'')+'"><span class="idot '+(it.kind==='del'?'del':it.kind==='res'?'res':'')+(it.t<=curT?' now':'')+'"></span>'+
+    '<span class="id">'+it.date+'</span><span class="iv">'+esc(it.v)+'</span></div>').join('');
+  inspector.classList.add('show');
+}
+document.getElementById('iClose').onclick=()=>{inspector.classList.remove('show');
+  sizer.querySelectorAll('.vc.pinned').forEach(x=>x.classList.remove('pinned'));};
+
+/* ============ INIT ============ */
+updateCount(null);updUI();renderWindow();
+</script>
+</body>
+</html>
