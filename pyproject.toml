@@ -24,6 +24,10 @@ pytest = "^8.0"
 # (STORE-3 / SC-007). NOT a runtime dependency — the runtime stays Polars + PyArrow.
 duckdb = "^1.0"
 pytz = "*"  # test-only: DuckDB needs it to read tz-aware timestamp parquet columns
+faker = "*"  # test/demo-only: seeded value source for scripts/demo_fixture.py (US7)
+
+[tool.poetry.scripts]
+flux = "flux_cli:main"
 
 
 [build-system]

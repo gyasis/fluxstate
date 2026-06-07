@@ -90,6 +90,43 @@ The reconstruction primitives also exist as module functions in `reconstruct.py`
 (`as_of`, `get_timeline`, `row_state`, `build_mirror_view`, …) taking a
 `ChangeLogStore` explicitly.
 
+## `flux` CLI
+
+Drive the whole change-log from the terminal (no code needed):
+
+```bash
+flux capture <store.flux> <input.parquet|csv> --key id [--at <ISO>]  # append-only capture
+flux travel <store.flux> --as-of 2026-03-01T00:00:00Z               # reconstruct table as-of T (typed)
+flux timeline <store.flux> <id> [--field risk]                       # per-cell history [{date,value}]
+flux row-state <store.flux> <id> [--as-of now]                       # {state, resurrected}
+flux view <store.flux> [--as-of T] [--format polars|arrow|parquet|csv] [--out …]
+flux info <store.flux>                                               # schema, key, #events, ts range
+flux gen-fixture <store.flux> --seed 42 [--violations 8]             # seeded demo/stress fixture
+flux serve <store.flux>                                              # launch the Temporal Viewer over the store
+```
+
+Every subcommand is a thin wrapper over the library — output equals the function it calls. `--json` everywhere.
+
+## Temporal Viewer ("Temporal Ghost")
+
+An interactive, in-browser viewer over one tracked table (`flux serve <store.flux>` → `http://localhost:5173`).
+Built in Svelte 5 + Vite + DuckDB-WASM (reads the `.flux/` parquet store directly in the browser); the JS
+reconstruction is held identical to `reconstruct.py` by a parity test.
+
+- **Time-travel** — scrub a date slider over the change-density histogram (event-snapped); every cell snaps to
+  its as-of value; changed cells show a daff-style `old → new` (pinned on step, fade on play).
+- **Inspect** — hover a cell for a peek; click to pin its full history (sparkline + every event incl.
+  `__deleted__`/resurrection) with a "now" marker that tracks the slider.
+- **Lifecycle** — deleted rows stripe out, resurrected show `✦`, per-cell heat-tint + per-row Δ gutter.
+- **Anomaly watcher** — a change to an *immutable* column (`id`/`birth_date`/`cohort`/`mrn`) is flagged **red ⚠**;
+  numeric changes show **direction** (↑/↓ + signed delta). Collect flagged rows via the **filter** (simple + SQL
+  `WHERE`, with meta-fields `changes`/`deleted`/`resurrected`/`flagged`/`id`; "showing X of N").
+- **Scale** — row virtualization (constant DOM) keeps scrub ~60fps on the 1000×20 fixture.
+- **Static / print** — a non-interactive audit render (latest + ghost value, lifecycle spark-path, auto-callouts,
+  `@media print`).
+
+Spec + design: `specs/002-fluxstate-temporal-viewer/` and the locked dev-spec `docs/viewer/fluxstate-viewer-dev-spec.md`.
+
 ## Tech Stack
 
 - **Python 3.10+**

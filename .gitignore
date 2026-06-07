@@ -39,6 +39,10 @@ ENV/
 htmlcov/
 .tox/
 
+# US4 100k stress fixture (generated; large, gitignored — do not commit).
+/stress100k.flux/
+/stress_gen_time.txt
+
 # Data files
 *.parquet
 *.csv
@@ -50,6 +54,14 @@ htmlcov/
 # SpecKit spec definition (.specify/) is a tracked deliverable, incl. its config.
 # (Agent RUNTIME dot-folders — .claude/*.json, .devkid/, .dk/ — stay ignored.)
 !.specify/**/*.json
+# Viewer build/config are tracked deliverables (needed to build), not data output.
+!viewer/package.json
+!viewer/package-lock.json
+!viewer/tsconfig*.json
+# Parity oracle is a tracked test fixture (the reconstruct.ts↔reconstruct.py check), not data output.
+!viewer/tests/fixtures/parity-ground-truth.json
+# The Python `lib/` build-ignore above wrongly catches the viewer's src/lib — that's the viewer's core source.
+!viewer/src/lib/
 
 # Snowflake credentials
 *.credentials
@@ -58,6 +70,9 @@ htmlcov/
 
 # Logs
 *.log
+
+# Playwright MCP transient capture dir (not project output)
+.playwright-mcp/
 
 # OS
 .DS_Store

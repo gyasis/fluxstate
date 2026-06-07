@@ -576,7 +576,9 @@ class ChangeLogStore:
         if events.is_empty():
             return {"events_added": 0, "snapshot_id": snap, "noop": True}
 
-        entry = self._append_events(events, snap, key_column, self._schema_tags(df, key_column))
+        entry = self._append_events(
+            events, snap, key_column, self._schema_tags(df, key_column), stamp=captured_at
+        )
         return {
             "events_added": events.height,
             "snapshot_id": snap,
