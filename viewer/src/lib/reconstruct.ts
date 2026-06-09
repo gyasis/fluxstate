@@ -38,8 +38,12 @@ export interface RawChangeEvent {
   snapshot_id: string;
 }
 
-/** A typed cell value at a point in time (null ⇒ no value / deletion / genuine null). */
-export type Typed = string | number | boolean | Date | null;
+/**
+ * A typed cell value at a point in time (null ⇒ no value / deletion / genuine null).
+ * `bigint` carries int64 values beyond float64's exact-integer range (|v| > 2^53-1),
+ * which a plain `number` would silently round (parity with Python's arbitrary int).
+ */
+export type Typed = string | number | bigint | boolean | Date | null;
 
 /** One point in a cell's history (ascending by date). */
 export interface TimelinePoint {
@@ -103,7 +107,11 @@ export function decodeValue(value: string | null, dtype: string): Typed {
     return null;
   }
   if (d.startsWith("int")) {
-    return Number(value);
+    // Preserve full int64 precision: values beyond float64's exact-integer range
+    // (|n| > 2^53-1) lose their low bits as a Number, so fall back to BigInt to
+    // match Python's arbitrary-precision int decode (audit F1).
+    const n = Number(value);
+    return Number.isSafeInteger(n) ? n : BigInt(value);
   }
   if (d.startsWith("float")) {
     return Number(value);
@@ -112,6 +120,11 @@ export function decodeValue(value: string | null, dtype: string): Typed {
     return value.trim().toLowerCase() === "true";
   }
   if (d.startsWith("datetime")) {
+    // NOTE (audit F2): `Date` is millisecond-resolution, so a datetime value with
+    // sub-millisecond microseconds is truncated here. This is an accepted viewer
+    // limitation — the whole temporal engine (scrubber/density/inspector) is
+    // Date/getTime()-based and parity is normalized to ms (see viewer-data.md VD-3).
+    // The store itself retains full µs; only the in-browser display rounds.
     return new Date(value);
   }
   // utf8 / str / string / any other tag → string form.

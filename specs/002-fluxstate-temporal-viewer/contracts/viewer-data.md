@@ -53,6 +53,6 @@ reconstruction is kept identical to the Python engine.
 |---|---|
 | VD-1 | The viewer reconstructs only from the real change-log (no JSON-in-cell / synthetic) — verified by reading the same store the CLI/library read. |
 | VD-2 | JS reconstruction == Python ground truth on 100% of parity probes, incl. deleted + resurrected + genuine-null. |
-| VD-3 | Values render in original type (numeric/datetime not string-cast). |
+| VD-3 | Values render in original type (numeric/datetime not string-cast). int64 values beyond the float64 safe-integer range (\|v\| > 2^53-1) decode to `bigint` (full precision, audit F1). **Datetime resolution is millisecond**: the viewer is `Date`-based throughout (scrubber/density/inspector) and parity is normalized to `getTime()` ms, so a datetime VALUE with sub-millisecond microseconds is truncated to ms on display (accepted limitation, audit F2 — the store itself retains full µs). |
 | VD-4 | Only the visible window + prefetch is fetched; the window cache is bounded (LRU eviction observed at capacity). |
 | VD-5 | `snapPoints` are exactly the unique event timestamps; the scrubber never snaps to a non-event day. |

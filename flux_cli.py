@@ -22,6 +22,7 @@ import argparse
 import json
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Optional, Sequence
 
 import polars as pl
@@ -67,6 +68,38 @@ def _records(df: pl.DataFrame) -> list[dict]:
 # --------------------------------------------------------------------------- #
 
 
+def _open_store(path: str) -> Optional[ChangeLogStore]:
+    """Open a store for READING, or print a clean error and return None.
+
+    A read command on a non-existent path must fail (stderr + non-zero exit),
+    NOT silently return an empty result — that conflates "store not found" with
+    "empty / before history" (cli.md: errors → stderr, non-zero exit on failure;
+    the exit-0 empty case is reserved for an EXISTING store queried before its
+    history).
+    """
+    if not Path(path).exists():
+        print(f"flux: store not found: {path}", file=sys.stderr)
+        return None
+    return ChangeLogStore(path)
+
+
+def _check_iso(value: Optional[str], flag: str, *, allow_now: bool) -> Optional[str]:
+    """Return a clean error string if ``value`` is not a valid timestamp, else None.
+
+    Guards the CLI boundary so an invalid ``--at`` / ``--as-of`` produces a clean
+    message + non-zero exit instead of a raw Python ``ValueError`` traceback.
+    """
+    if value is None:
+        return None
+    if allow_now and value.strip().lower() == "now":
+        return None
+    try:
+        datetime.fromisoformat(value)
+    except ValueError as exc:
+        return f"flux: invalid {flag} timestamp {value!r}: {exc}"
+    return None
+
+
 def _load_frame(path: str) -> pl.DataFrame:
     """Load a capture input into a Polars DataFrame (``.parquet`` or ``.csv``)."""
     lower = path.lower()
@@ -84,6 +117,10 @@ def cmd_capture(args: argparse.Namespace) -> int:
     append-only + idempotent guarantees), and print the result dict
     (``events_added/snapshot_id/file/noop``). ``--json`` for machine output (CLI-1).
     """
+    err = _check_iso(args.at, "--at", allow_now=False)
+    if err:
+        print(err, file=sys.stderr)
+        return 2
     df = _load_frame(args.input)
     captured_at = datetime.fromisoformat(args.at) if args.at else None
     store = ChangeLogStore(args.store)
@@ -103,7 +140,13 @@ def cmd_travel(args: argparse.Namespace) -> int:
     Prints a text table by default; ``--json`` → typed records. A T before any
     history yields an empty result (NOT an error) and exit 0 (CLI-2).
     """
-    store = ChangeLogStore(args.store)
+    err = _check_iso(args.as_of, "--as-of", allow_now=True)
+    if err:
+        print(err, file=sys.stderr)
+        return 2
+    store = _open_store(args.store)
+    if store is None:
+        return 1
     view = reconstruct.build_mirror_view(store, T=args.as_of)
     if args.json:
         _emit_json(_records(view))
@@ -118,7 +161,9 @@ def cmd_timeline(args: argparse.Namespace) -> int:
     Output equals the library return ``[{date, value[, field]}]`` (CLI-3); values
     typed. ``--json`` emits ISO-8601 dates.
     """
-    store = ChangeLogStore(args.store)
+    store = _open_store(args.store)
+    if store is None:
+        return 1
     timeline = reconstruct.get_timeline(store, args.entity_id, field=args.field)
     if args.json:
         _emit_json(timeline)
@@ -134,7 +179,13 @@ def cmd_row_state(args: argparse.Namespace) -> int:
 
     Output equals the library return ``{state, resurrected}`` (CLI-3).
     """
-    store = ChangeLogStore(args.store)
+    err = _check_iso(args.as_of, "--as-of", allow_now=True)
+    if err:
+        print(err, file=sys.stderr)
+        return 2
+    store = _open_store(args.store)
+    if store is None:
+        return 1
     state = reconstruct.row_state(store, args.entity_id, T=args.as_of)
     if args.json:
         _emit_json(state)
@@ -156,7 +207,13 @@ def cmd_view(args: argparse.Namespace) -> int:
     specific as-of the same ``build_mirror_view`` frame is written directly so file
     output equals the library at that point in time.
     """
-    store = ChangeLogStore(args.store)
+    err = _check_iso(args.as_of, "--as-of", allow_now=True)
+    if err:
+        print(err, file=sys.stderr)
+        return 2
+    store = _open_store(args.store)
+    if store is None:
+        return 1
     view = reconstruct.build_mirror_view(store, T=args.as_of)
 
     if args.format in ("parquet", "csv"):
@@ -194,7 +251,9 @@ def cmd_view(args: argparse.Namespace) -> int:
 
 def cmd_info(args: argparse.Namespace) -> int:
     """``flux info <store>`` → manifest summary (schema, key, #events, ts range, snaps)."""
-    store = ChangeLogStore(args.store)
+    store = _open_store(args.store)
+    if store is None:
+        return 1
     manifest = store.read_manifest()
     events = manifest.get("events", [])
 

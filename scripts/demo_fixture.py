@@ -246,6 +246,10 @@ def generate(store_path, rows=1000, cols=20, steps=40, seed=42, violations=0) ->
 
     # Reserve a chunk of ids to be BORN later so unborn→active happens partway.
     n_born_later = max(20, rows // 20)  # ~5% appear after the initial snapshot
+    # Never reserve more than rows-1 to be born later: with the max(20, …) floor,
+    # any rows <= 20 produced a negative initial_count → negative/zero entity ids
+    # that were never built → KeyError. Clamp leaves rows >= 21 byte-identical.
+    n_born_later = min(n_born_later, max(0, rows - 1))
     initial_count = rows - n_born_later
 
     # Build every entity's value record up front (Faker/numpy do all value work).

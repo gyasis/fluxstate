@@ -322,7 +322,14 @@ class ChangeLogStore:
 
         manifest = self.read_manifest()
         manifest["key_column"] = key_column
-        manifest["schema"] = schema
+        # Append-only schema UNION (not overwrite): a column dropped from a later
+        # snapshot must still resolve in historical as-of views, since its events
+        # remain in history. Latest dtype tag wins if a column is re-seen; the
+        # first-seen column order is preserved. (Overwriting here erased dropped
+        # columns from every past view — silent time-travel corruption.)
+        merged_schema = dict(manifest.get("schema") or {})
+        merged_schema.update(schema)
+        manifest["schema"] = merged_schema
         manifest["events"].append(entry)
         self.write_manifest(manifest)
         return entry
@@ -561,6 +568,16 @@ class ChangeLogStore:
         """
         if key_column not in df.columns:
             raise ValueError(f"key_column {key_column!r} not in frame columns {df.columns}")
+
+        # A snapshot is a keyed wide table: each entity must appear at most once.
+        # Duplicate keys silently emit conflicting events for the same cell at the
+        # same timestamp, and the reconstructed value would depend on row order.
+        if df.height and df[key_column].is_duplicated().any():
+            dupes = df[key_column].filter(df[key_column].is_duplicated()).unique().to_list()
+            raise ValueError(
+                f"key_column {key_column!r} has duplicate values {sorted(dupes)[:10]} "
+                f"({len(dupes)} distinct) — each entity must appear at most once per snapshot"
+            )
 
         captured_at = to_utc(captured_at or datetime.now(timezone.utc))
         snap = snapshot_id(df, key_column)
