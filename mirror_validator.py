@@ -1,14 +1,15 @@
 from datetime import datetime
 import logging
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, validator, Field, ValidationError
+from pydantic import BaseModel, field_validator, Field, ValidationError
 import orjson
 
 class HistoricalRecord(BaseModel):
     date: str  # We'll keep it as string since that's how it's stored
     value: Optional[str]  # Allow None/NULL values
 
-    @validator('date', pre=True)
+    @field_validator('date', mode='before')
+    @classmethod
     def validate_date_format(cls, v):
         """Convert datetime objects to strings and validate date format"""
         if isinstance(v, datetime):
@@ -28,7 +29,8 @@ class HistoricalRecord(BaseModel):
         else:
             raise ValueError("Date must be either a datetime object or a string")
 
-    @validator('value', pre=True)
+    @field_validator('value', mode='before')
+    @classmethod
     def convert_value_to_string(cls, v):
         """Convert any value to string format"""
         if v is None:
@@ -45,7 +47,8 @@ class HistoricalRecord(BaseModel):
 class MirrorTableColumn(BaseModel):
     records: List[HistoricalRecord]
 
-    @validator('records', pre=True)
+    @field_validator('records', mode='before')
+    @classmethod
     def check_no_nested_lists(cls, v):
         if not isinstance(v, list):
             raise ValueError("Column data must be a list")

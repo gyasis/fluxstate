@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fluxstate/contracts/parity.schema.json",
+  "title": "FluxState Viewer Reconstruction Parity Ground Truth",
+  "description": "Python (reconstruct.py) exports this; the JS viewer (reconstruct.ts) must reproduce every probe identically. Drives FR-003 / SC-003 / VD-2.",
+  "type": "object",
+  "required": ["store", "key_column", "schema", "snap_points", "probes"],
+  "additionalProperties": false,
+  "properties": {
+    "store": { "type": "string", "description": "Path/name of the .flux store the probes were computed against." },
+    "key_column": { "type": "string" },
+    "schema": {
+      "type": "object",
+      "description": "Tracked column -> dtype tag (int64/float64/utf8/bool/datetime[us, UTC]/null).",
+      "additionalProperties": { "type": "string" }
+    },
+    "snap_points": {
+      "type": "array",
+      "description": "Sorted unique event timestamps (ISO-8601 UTC) — the scrubber's snap targets.",
+      "items": { "type": "string", "format": "date-time" }
+    },
+    "density_buckets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["bucket_start", "bucket_end", "change_count"],
+        "additionalProperties": false,
+        "properties": {
+          "bucket_start": { "type": "string", "format": "date-time" },
+          "bucket_end": { "type": "string", "format": "date-time" },
+          "change_count": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "probes": {
+      "type": "array",
+      "description": "The assertions the JS port must reproduce.",
+      "items": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": { "enum": ["as_of", "timeline", "row_state", "change_count", "build_mirror_view"] },
+          "entity_id": { "type": "string" },
+          "field": { "type": ["string", "null"] },
+          "T": { "type": ["string", "null"], "format": "date-time", "description": "UTC; null = 'now'." },
+          "expected": {
+            "description": "The exact value reconstruct.py returned. Shape depends on kind:",
+            "comment": "as_of -> {date,value}|null ; timeline -> [{date,value(,field)}] ; row_state -> {state,resurrected} ; change_count -> integer ; build_mirror_view -> {columns:[...], rows:[[...]]} typed."
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "must_include_cases": {
+      "type": "object",
+      "description": "Coverage assertions for the probe set — the export MUST exercise these.",
+      "properties": {
+        "deleted_entity": { "type": "boolean", "const": true },
+        "resurrected_entity": { "type": "boolean", "const": true },
+        "genuine_null_cell": { "type": "boolean", "const": true },
+        "as_of_before_history_empty": { "type": "boolean", "const": true }
+      }
+    }
+  }
+}

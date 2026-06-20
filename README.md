@@ -1,6 +1,18 @@
 # FluxState
 
+> **FluxState is a faithful recorder of what the source emits — not a semantic-equality engine.**
+
 > Cell-level Change Data Capture (CDC) system with temporal versioning for healthcare data workflows
+
+### Guiding principle
+
+**FluxState is a faithful recorder of what the source emits, not a semantic-equality engine.**
+It records what changed in the source's *serialized output*, verbatim. If a source emits
+`1.1` one run and `1.10` the next, or shifts a timestamp's timezone representation, that **is**
+a change and FluxState surfaces it — it does not canonicalize values to decide they're "really
+equal." Every value is normalized to a canonical **text** form for storage/comparison, with a
+per-column `dtype` tag carried alongside so a consumer can re-cast when it wants typed
+sort/compare. This is by design: faithfulness over cleverness.
 
 FluxState is a Python library that tracks every cell-level change in database tables with full historical versioning. Designed specifically for healthcare data pipelines at Herself Health, it maintains temporal "mirror tables" where each cell contains a complete audit trail.
 
@@ -90,6 +102,78 @@ The reconstruction primitives also exist as module functions in `reconstruct.py`
 (`as_of`, `get_timeline`, `row_state`, `build_mirror_view`, …) taking a
 `ChangeLogStore` explicitly.
 
+## `flux` CLI
+
+Drive the whole change-log from the terminal (no code needed):
+
+```bash
+flux capture <store.flux> <input.parquet|csv> --key id [--at <ISO>]  # append-only capture
+flux travel <store.flux> --as-of 2026-03-01T00:00:00Z               # reconstruct table as-of T (typed)
+flux timeline <store.flux> <id> [--field risk]                       # per-cell history [{date,value}]
+flux row-state <store.flux> <id> [--as-of now]                       # {state, resurrected}
+flux view <store.flux> [--as-of T] [--format polars|arrow|parquet|csv] [--out …]
+flux info <store.flux>                                               # schema, key, #events, ts range
+flux gen-fixture <store.flux> --seed 42 [--violations 8]             # seeded demo/stress fixture
+flux serve <store.flux>                                              # launch the Temporal Viewer over the store
+```
+
+Every subcommand is a thin wrapper over the library — output equals the function it calls. `--json` everywhere.
+
+## Temporal Viewer ("Temporal Ghost")
+
+An interactive, in-browser viewer over one tracked table (`flux serve <store.flux>` → `http://localhost:5173`).
+Built in Svelte 5 + Vite + DuckDB-WASM (reads the `.flux/` parquet store directly in the browser); the JS
+reconstruction is held identical to `reconstruct.py` by a parity test.
+
+- **Time-travel** — scrub a date slider over the change-density histogram (event-snapped); every cell snaps to
+  its as-of value; changed cells show a daff-style `old → new` (pinned on step, fade on play).
+- **Inspect** — hover a cell for a peek; click to pin its full history (sparkline + every event incl.
+  `__deleted__`/resurrection) with a "now" marker that tracks the slider.
+- **Lifecycle** — deleted rows stripe out, resurrected show `✦`, per-cell heat-tint + per-row Δ gutter.
+- **Anomaly watcher** — a change to an *immutable* column (`id`/`birth_date`/`cohort`/`mrn`) is flagged **red ⚠**;
+  numeric changes show **direction** (↑/↓ + signed delta). Collect flagged rows via the **filter** (simple + SQL
+  `WHERE`, with meta-fields `changes`/`deleted`/`resurrected`/`flagged`/`id`; "showing X of N").
+- **Scale** — row virtualization (constant DOM) keeps scrub ~60fps on the 1000×20 fixture.
+- **Static / print** — a non-interactive audit render (latest + ghost value, lifecycle spark-path, auto-callouts,
+  `@media print`).
+
+Spec + design: `specs/002-fluxstate-temporal-viewer/` and the locked dev-spec `docs/viewer/fluxstate-viewer-dev-spec.md`.
+Every visual surface is catalogued in **[`docs/VISUALIZATIONS.md`](docs/VISUALIZATIONS.md)**.
+
+### Make a test dataset & open the viewer
+
+**1. Generate a `.flux` store to look at** (any of):
+
+```bash
+uv run flux gen-fixture demo.flux --seed 42                 # the 1000×20 demo (reproducible)
+uv run flux gen-fixture stress100k.flux --rows 100000       # the 100k-entity stress store
+uv run python scripts/schema_churn_demo.py schema_churn.flux  # SCHEMA-EVOLUTION showcase:
+                                                            #   +email(d2) −score(d4)
+                                                            #   name→full_name(d5) +status −region(d6)
+```
+
+The schema-churn store is the one to watch the new column add/drop/rename behavior (issue #6):
+scrub the slider and a dropped column reads NULL from its drop date on (no stale "ghost"), a rename
+shows the old column empty and the new one filled.
+
+**2. Open it in the viewer:**
+
+```bash
+uv run flux serve demo.flux            # boots Vite over the store, opens the browser
+# or, manually:
+cd viewer && npm run dev               # http://localhost:5173  (serves viewer/public/demo.flux by default)
+```
+
+**3. Point the viewer at a non-default store** — copy the `<name>.flux/` folder into `viewer/public/`,
+then load it via the `?store=` query param:
+
+```bash
+cp -r schema_churn.flux viewer/public/
+# open:  http://localhost:5173/?store=schema_churn.flux
+```
+
+With no `?store=`, the viewer loads `/demo.flux`. `.flux` stores are git-ignored (generated, reproducible).
+
 ## Tech Stack
 
 - **Python 3.10+**
@@ -109,10 +193,15 @@ The reconstruction primitives also exist as module functions in `reconstruct.py`
 git clone https://github.com/gyasis/fluxstate.git
 cd fluxstate
 
-# Install with uv (recommended)
-uv pip install -e .
+# Install with uv (recommended) — creates .venv and installs the project
+# plus its dev/test group from the committed uv.lock (reproducible).
+uv sync
 
-# Or with pip
+# Run the CLI and tests through the synced env:
+uv run flux --help
+uv run pytest TESTS/ -q
+
+# Or a plain editable install with pip:
 pip install -e .
 ```
 
@@ -171,6 +260,12 @@ fluxstate/
 - **[`docs/API.md`](docs/API.md)** — full API reference + usage guide for the change-log
   system (`FluxState`, `ChangeLogStore`, `reconstruct`), the `.flux/` store layout, the
   manifest, dtype tags, migration notes, and guarantees. Every example is runnable.
+- **[`docs/VISUALIZATIONS.md`](docs/VISUALIZATIONS.md)** — catalogue of every visual surface
+  in the Temporal Ghost viewer (scrubber, as-of diff table, windowed table, inspector, filter,
+  static audit view, anomaly signals): what each shows, the data it needs, and how it behaves.
+- **[`docs/PHAROS_INTEGRATION.md`](docs/PHAROS_INTEGRATION.md)** — how to embed FluxState into
+  Pharos: the library-audit mode (`harbor` pattern), the temporal-view mode (Table Gen),
+  schema-evolution behavior for churning dbt sources, and the integration contract/gotchas.
 
 See `memory-bank/` for comprehensive project documentation:
 - **projectbrief.md** - Core concepts and architecture

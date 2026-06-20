@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fluxstate/contracts/manifest.schema.json",
+  "title": "FluxState Change-Log Store Manifest",
+  "description": "Authoritative commit record for a <name>.flux/ store. Readers trust only files listed here.",
+  "type": "object",
+  "required": ["schema_version", "key_column", "schema", "events"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Manifest format version."
+    },
+    "store_name": {
+      "type": "string",
+      "description": "Logical name of the tracked table/view (the <name> in <name>.flux/)."
+    },
+    "key_column": {
+      "type": "string",
+      "description": "Source column providing entity_id."
+    },
+    "schema": {
+      "type": "object",
+      "description": "Tracked-table column -> Polars dtype tag (e.g. {\"risk\": \"float64\", \"status\": \"utf8\"}).",
+      "additionalProperties": { "type": "string" }
+    },
+    "events": {
+      "type": "array",
+      "description": "Ordered list of committed event files. ONLY these are valid history.",
+      "items": {
+        "type": "object",
+        "required": ["file", "snapshot_id", "ts_min", "ts_max", "row_count"],
+        "additionalProperties": false,
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Path relative to the store root, e.g. 'events/20260605T143000Z.parquet'."
+          },
+          "snapshot_id": {
+            "type": "string",
+            "description": "Content-derived id of the capture that produced this file (idempotency)."
+          },
+          "ts_min": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Earliest event timestamp in the file (UTC) — for file-skip time-travel."
+          },
+          "ts_max": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Latest event timestamp in the file (UTC)."
+          },
+          "row_count": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "Number of change events in the file."
+          }
+        }
+      }
+    },
+    "checkpoints": {
+      "type": "array",
+      "description": "Materialized point-in-time snapshots. Empty in P1 (fast-follow).",
+      "items": {
+        "type": "object",
+        "required": ["file", "as_of"],
+        "additionalProperties": false,
+        "properties": {
+          "file": { "type": "string" },
+          "as_of": { "type": "string", "format": "date-time" }
+        }
+      },
+      "default": []
+    }
+  }
+}

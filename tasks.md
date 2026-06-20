@@ -1,1 +1,1 @@
-specs/001-changelog-first-pivot/tasks.md
+specs/002-fluxstate-temporal-viewer/tasks.md

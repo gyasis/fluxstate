@@ -1,27 +1,25 @@
 # Active Context
 
-**Last Updated**: 2026-06-05 18:15:44
+**Last Updated**: 2026-06-05 18:49:14
 
 ## Current Focus
-test: retire legacy Snowflake-coupled unit tests (T028)
+chore(gitignore): one consistent policy for dot-folders
 
-Move the pre-pivot unit tests into TESTS/legacy/ — they import
-snowflake.snowpark (can't run hermetically), exercise the removed in-memory
-mirror-table API, and aren't pytest-collected by naming. The new per-story
-suite (test_changelog/idempotency/capture_scale/reconstruct/lifecycle/
-output_formats) is the rewrite to the change-log API. Kept (not deleted) for
-reference; recoverable from history. Active suite stays green (21 passed).
-
-Retired: Unit_1..8.py, unit_1_mock.py, FluxStateValidatorTest.py.
+Spec deliverables are tracked, agent runtime is ignored:
+- track `.specify/**/*.json` (SpecKit spec definition — feature/config; its
+  templates + constitution were already tracked, only its JSON was excluded by
+  the `*.json` blanket rule)
+- explicitly ignore agent runtime state: `.devkid/`, `.dk/`, `execution_plan.json`
+  (generated, machine-local; source config is the tracked dev-kid.yml / .specify/)
 
 Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
 
 ## Recent Changes
 ```
- .claude/activity_stream.md                  |  9 +++++++++
- memory-bank/private/gyasis/activeContext.md | 25 ++++++++++++------------
+ .claude/activity_stream.md                  | 12 ++++++++++++
+ memory-bank/private/gyasis/activeContext.md | 23 ++++++++++-------------
  memory-bank/private/gyasis/progress.md      |  2 +-
- 3 files changed, 23 insertions(+), 13 deletions(-)
+ 3 files changed, 23 insertions(+), 14 deletions(-)
 ```
 
 ## Modified Files

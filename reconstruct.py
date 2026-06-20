@@ -76,12 +76,15 @@ def _as_of(history: list[dict], T: datetime) -> Optional[dict]:
     public :func:`as_of`, which first looks up the series then applies this.
     """
     T = to_utc(T)
+    # Pick the entry with the LATEST date at/before T. Order-independent: a prior
+    # early-`break` on the first out-of-order entry silently returned None (or a
+    # stale value) for unsorted input. Sorted-ascending input is unaffected.
     result = None
+    result_date = None
     for entry in history:
-        if to_utc(entry["date"]) <= T:
-            result = entry
-        else:
-            break
+        d = to_utc(entry["date"])
+        if d <= T and (result_date is None or d >= result_date):
+            result, result_date = entry, d
     return result
 
 
@@ -138,7 +141,11 @@ def build_mirror_view(store: ChangeLogStore, T: str | datetime = "now") -> pl.Da
     if view is None:
         # No state at/before T → empty frame, but keep the table's columns/types.
         return pl.DataFrame(schema=pl_schema)
-    return view
+    # Deterministic row order by key (issue #4): without this, the row order for
+    # entities sharing one timestamp follows insertion/pivot order, which is
+    # implementation-defined and diverged from the JS viewer. Sorting by the key
+    # on BOTH sides makes the mirror-view row order a stable, matching contract.
+    return view.sort(key_column)
 
 
 # --------------------------------------------------------------------------- #

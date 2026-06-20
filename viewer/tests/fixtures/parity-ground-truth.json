@@ -1,0 +1,680 @@
+{
+  "store": "parity.flux",
+  "key_column": "id",
+  "schema": {
+    "id": "int64",
+    "name": "utf8",
+    "score": "float64",
+    "flag": "bool",
+    "seen": "datetime[us, UTC]"
+  },
+  "snap_points": [
+    "2026-01-01T00:00:00+00:00",
+    "2026-01-02T00:00:00+00:00",
+    "2026-01-03T00:00:00+00:00",
+    "2026-01-04T00:00:00+00:00",
+    "2026-01-05T00:00:00+00:00"
+  ],
+  "probes": [
+    {
+      "kind": "as_of",
+      "expected": null,
+      "entity_id": "100",
+      "field": "name",
+      "T": "2025-12-31T00:00:00+00:00"
+    },
+    {
+      "kind": "as_of",
+      "expected": {
+        "date": "2026-01-02T00:00:00+00:00",
+        "value": "alice2"
+      },
+      "entity_id": "100",
+      "field": "name",
+      "T": "2026-01-02T00:00:00+00:00"
+    },
+    {
+      "kind": "as_of",
+      "expected": {
+        "date": "2026-01-02T00:00:00+00:00",
+        "value": 1.5
+      },
+      "entity_id": "100",
+      "field": "score",
+      "T": "2026-01-02T12:00:00+00:00"
+    },
+    {
+      "kind": "as_of",
+      "expected": {
+        "date": "2026-01-02T00:00:00+00:00",
+        "value": null
+      },
+      "entity_id": "200",
+      "field": "score",
+      "T": "2026-01-02T00:00:00+00:00"
+    },
+    {
+      "kind": "as_of",
+      "expected": {
+        "date": "2026-01-04T00:00:00+00:00",
+        "value": "2026-01-04T00:00:00+00:00"
+      },
+      "entity_id": "100",
+      "field": "seen",
+      "T": null
+    },
+    {
+      "kind": "as_of",
+      "expected": {
+        "date": "2026-01-02T00:00:00+00:00",
+        "value": 3.0
+      },
+      "entity_id": "300",
+      "field": "score",
+      "T": null
+    },
+    {
+      "kind": "timeline",
+      "expected": [
+        {
+          "date": "2026-01-01T00:00:00+00:00",
+          "value": "alice"
+        },
+        {
+          "date": "2026-01-02T00:00:00+00:00",
+          "value": "alice2"
+        },
+        {
+          "date": "2026-01-04T00:00:00+00:00",
+          "value": "alice3"
+        }
+      ],
+      "entity_id": "100",
+      "field": "name"
+    },
+    {
+      "kind": "timeline",
+      "expected": [
+        {
+          "date": "2026-01-01T00:00:00+00:00",
+          "value": 2.0
+        },
+        {
+          "date": "2026-01-02T00:00:00+00:00",
+          "value": null
+        }
+      ],
+      "entity_id": "200",
+      "field": "score"
+    },
+    {
+      "kind": "timeline",
+      "expected": [
+        {
+          "date": "2026-01-01T00:00:00+00:00",
+          "value": true,
+          "field": "flag"
+        },
+        {
+          "date": "2026-01-01T00:00:00+00:00",
+          "value": "alice",
+          "field": "name"
+        },
+        {
+          "date": "2026-01-01T00:00:00+00:00",
+          "value": 1.0,
+          "field": "score"
+        },
+        {
+          "date": "2026-01-01T00:00:00+00:00",
+          "value": "2026-01-01T00:00:00+00:00",
+          "field": "seen"
+        },
+        {
+          "date": "2026-01-02T00:00:00+00:00",
+          "value": "alice2",
+          "field": "name"
+        },
+        {
+          "date": "2026-01-02T00:00:00+00:00",
+          "value": 1.5,
+          "field": "score"
+        },
+        {
+          "date": "2026-01-02T00:00:00+00:00",
+          "value": "2026-01-02T00:00:00+00:00",
+          "field": "seen"
+        },
+        {
+          "date": "2026-01-03T00:00:00+00:00",
+          "value": null,
+          "field": "__deleted__"
+        },
+        {
+          "date": "2026-01-04T00:00:00+00:00",
+          "value": true,
+          "field": "flag"
+        },
+        {
+          "date": "2026-01-04T00:00:00+00:00",
+          "value": "alice3",
+          "field": "name"
+        },
+        {
+          "date": "2026-01-04T00:00:00+00:00",
+          "value": 9.0,
+          "field": "score"
+        },
+        {
+          "date": "2026-01-04T00:00:00+00:00",
+          "value": "2026-01-04T00:00:00+00:00",
+          "field": "seen"
+        },
+        {
+          "date": "2026-01-05T00:00:00+00:00",
+          "value": null,
+          "field": "__deleted__"
+        }
+      ],
+      "entity_id": "100"
+    },
+    {
+      "kind": "row_state",
+      "expected": {
+        "state": "deleted",
+        "resurrected": false
+      },
+      "entity_id": "100",
+      "T": "2026-01-03T00:00:00+00:00"
+    },
+    {
+      "kind": "row_state",
+      "expected": {
+        "state": "deleted",
+        "resurrected": true
+      },
+      "entity_id": "100",
+      "T": null
+    },
+    {
+      "kind": "row_state",
+      "expected": {
+        "state": "unborn",
+        "resurrected": false
+      },
+      "entity_id": "100",
+      "T": "2025-12-31T00:00:00+00:00"
+    },
+    {
+      "kind": "row_state",
+      "expected": {
+        "state": "deleted",
+        "resurrected": false
+      },
+      "entity_id": "200",
+      "T": null
+    },
+    {
+      "kind": "change_count",
+      "expected": 13,
+      "entity_id": "100"
+    },
+    {
+      "kind": "change_count",
+      "expected": 6,
+      "entity_id": "200"
+    },
+    {
+      "kind": "change_count",
+      "expected": 5,
+      "entity_id": "300"
+    },
+    {
+      "kind": "build_mirror_view",
+      "expected": {
+        "columns": [
+          "id",
+          "name",
+          "score",
+          "flag",
+          "seen"
+        ],
+        "rows": []
+      },
+      "T": "2025-12-31T00:00:00+00:00"
+    },
+    {
+      "kind": "build_mirror_view",
+      "expected": {
+        "columns": [
+          "id",
+          "name",
+          "score",
+          "flag",
+          "seen"
+        ],
+        "rows": [
+          [
+            100,
+            "alice2",
+            1.5,
+            true,
+            "2026-01-02T00:00:00+00:00"
+          ],
+          [
+            200,
+            "bob",
+            null,
+            false,
+            "2026-01-01T00:00:00+00:00"
+          ],
+          [
+            300,
+            "carol",
+            3.0,
+            true,
+            "2026-01-02T00:00:00+00:00"
+          ]
+        ]
+      },
+      "T": "2026-01-02T00:00:00+00:00"
+    },
+    {
+      "kind": "build_mirror_view",
+      "expected": {
+        "columns": [
+          "id",
+          "name",
+          "score",
+          "flag",
+          "seen"
+        ],
+        "rows": [
+          [
+            200,
+            "bob",
+            null,
+            false,
+            "2026-01-01T00:00:00+00:00"
+          ],
+          [
+            300,
+            "carol",
+            3.0,
+            true,
+            "2026-01-02T00:00:00+00:00"
+          ]
+        ]
+      },
+      "T": "2026-01-03T00:00:00+00:00"
+    },
+    {
+      "kind": "build_mirror_view",
+      "expected": {
+        "columns": [
+          "id",
+          "name",
+          "score",
+          "flag",
+          "seen"
+        ],
+        "rows": [
+          [
+            30,
+            "cara",
+            3.0,
+            true,
+            "2026-01-05T00:00:00+00:00"
+          ],
+          [
+            40,
+            "dan",
+            4.0,
+            false,
+            "2026-01-05T00:00:00+00:00"
+          ],
+          [
+            50,
+            "eve",
+            5.0,
+            true,
+            "2026-01-05T00:00:00+00:00"
+          ]
+        ]
+      },
+      "T": null
+    },
+    {
+      "kind": "build_mirror_view",
+      "expected": {
+        "columns": [
+          "id",
+          "name",
+          "score",
+          "flag",
+          "seen"
+        ],
+        "rows": [
+          [
+            30,
+            "cara",
+            3.0,
+            true,
+            "2026-01-05T00:00:00+00:00"
+          ],
+          [
+            40,
+            "dan",
+            4.0,
+            false,
+            "2026-01-05T00:00:00+00:00"
+          ],
+          [
+            50,
+            "eve",
+            5.0,
+            true,
+            "2026-01-05T00:00:00+00:00"
+          ]
+        ]
+      },
+      "T": "2026-01-05T00:00:00+00:00"
+    }
+  ],
+  "must_include_cases": {
+    "deleted_entity": true,
+    "resurrected_entity": true,
+    "genuine_null_cell": true,
+    "as_of_before_history_empty": true
+  },
+  "events": [
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "field": "flag",
+      "value": "true",
+      "dtype": "bool",
+      "snapshot_id": "2bf56ec3f23c32ac"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "field": "name",
+      "value": "alice",
+      "dtype": "utf8",
+      "snapshot_id": "2bf56ec3f23c32ac"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "field": "score",
+      "value": "1.0",
+      "dtype": "float64",
+      "snapshot_id": "2bf56ec3f23c32ac"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-01T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "2bf56ec3f23c32ac"
+    },
+    {
+      "entity_id": "200",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "field": "flag",
+      "value": "false",
+      "dtype": "bool",
+      "snapshot_id": "2bf56ec3f23c32ac"
+    },
+    {
+      "entity_id": "200",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "field": "name",
+      "value": "bob",
+      "dtype": "utf8",
+      "snapshot_id": "2bf56ec3f23c32ac"
+    },
+    {
+      "entity_id": "200",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "field": "score",
+      "value": "2.0",
+      "dtype": "float64",
+      "snapshot_id": "2bf56ec3f23c32ac"
+    },
+    {
+      "entity_id": "200",
+      "timestamp": "2026-01-01T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-01T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "2bf56ec3f23c32ac"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-02T00:00:00+00:00",
+      "field": "name",
+      "value": "alice2",
+      "dtype": "utf8",
+      "snapshot_id": "9f51d8fb24975897"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-02T00:00:00+00:00",
+      "field": "score",
+      "value": "1.5",
+      "dtype": "float64",
+      "snapshot_id": "9f51d8fb24975897"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-02T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-02T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "9f51d8fb24975897"
+    },
+    {
+      "entity_id": "200",
+      "timestamp": "2026-01-02T00:00:00+00:00",
+      "field": "score",
+      "value": null,
+      "dtype": "float64",
+      "snapshot_id": "9f51d8fb24975897"
+    },
+    {
+      "entity_id": "300",
+      "timestamp": "2026-01-02T00:00:00+00:00",
+      "field": "flag",
+      "value": "true",
+      "dtype": "bool",
+      "snapshot_id": "9f51d8fb24975897"
+    },
+    {
+      "entity_id": "300",
+      "timestamp": "2026-01-02T00:00:00+00:00",
+      "field": "name",
+      "value": "carol",
+      "dtype": "utf8",
+      "snapshot_id": "9f51d8fb24975897"
+    },
+    {
+      "entity_id": "300",
+      "timestamp": "2026-01-02T00:00:00+00:00",
+      "field": "score",
+      "value": "3.0",
+      "dtype": "float64",
+      "snapshot_id": "9f51d8fb24975897"
+    },
+    {
+      "entity_id": "300",
+      "timestamp": "2026-01-02T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-02T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "9f51d8fb24975897"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-03T00:00:00+00:00",
+      "field": "__deleted__",
+      "value": null,
+      "dtype": "null",
+      "snapshot_id": "dc4604a53acfd7e0"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-04T00:00:00+00:00",
+      "field": "flag",
+      "value": "true",
+      "dtype": "bool",
+      "snapshot_id": "911c0f0df4932e6e"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-04T00:00:00+00:00",
+      "field": "name",
+      "value": "alice3",
+      "dtype": "utf8",
+      "snapshot_id": "911c0f0df4932e6e"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-04T00:00:00+00:00",
+      "field": "score",
+      "value": "9.0",
+      "dtype": "float64",
+      "snapshot_id": "911c0f0df4932e6e"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-04T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-04T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "911c0f0df4932e6e"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "__deleted__",
+      "value": null,
+      "dtype": "null",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "200",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "__deleted__",
+      "value": null,
+      "dtype": "null",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "30",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "flag",
+      "value": "true",
+      "dtype": "bool",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "30",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "name",
+      "value": "cara",
+      "dtype": "utf8",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "30",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "score",
+      "value": "3.0",
+      "dtype": "float64",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "30",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-05T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "300",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "__deleted__",
+      "value": null,
+      "dtype": "null",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "40",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "flag",
+      "value": "false",
+      "dtype": "bool",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "40",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "name",
+      "value": "dan",
+      "dtype": "utf8",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "40",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "score",
+      "value": "4.0",
+      "dtype": "float64",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "40",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-05T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "50",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "flag",
+      "value": "true",
+      "dtype": "bool",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "50",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "name",
+      "value": "eve",
+      "dtype": "utf8",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "50",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "score",
+      "value": "5.0",
+      "dtype": "float64",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "50",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-05T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "4f748d9f3d40d469"
+    }
+  ]
+}

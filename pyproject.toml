@@ -1,31 +1,53 @@
-[tool.poetry]
+[project]
 name = "fluxstate"
 version = "0.1.0"
-description = ""
-authors = ["gyasis <gyasis@gmail.com>"]
+description = "Append-only change-log store for tabular data with point-in-time reconstruction and a temporal viewer."
+authors = [{ name = "gyasis", email = "gyasis@gmail.com" }]
 readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "polars>=1.5.0",
+    "orjson>=3.10.7",
+    "numpy>=2.1.0",
+    "pyarrow>=17.0.0",
+    "humanize>=4.10.0",
+    "tqdm>=4.66.5",
+    # Pre-existing (undeclared) runtime dep: mirror_validator.py uses pydantic.BaseModel
+    # and __init__.py imports it unconditionally. Declared so a clean venv imports cleanly
+    # (SC-006). NOT a new P1 dependency — surfacing existing usage. See spec U3 remediation.
+    "pydantic>=2.0",
+]
 
-[tool.poetry.dependencies]
-python = "^3.10"
-polars = "^1.5.0"
-orjson = "^3.10.7"
-numpy = "^2.1.0"
-pyarrow = "^17.0.0"
-humanize = "^4.10.0"
-tqdm = "^4.66.5"
-# Pre-existing (undeclared) runtime dep: mirror_validator.py uses pydantic.BaseModel
-# and __init__.py imports it unconditionally. Declared so a clean venv imports cleanly
-# (SC-006). NOT a new P1 dependency — surfacing existing usage. See spec U3 remediation.
-pydantic = "^2.0"
+[project.scripts]
+flux = "flux_cli:main"
 
-[tool.poetry.group.dev.dependencies]
-pytest = "^8.0"
-# Test-only: proves the .flux/ store is glob-readable by an external engine
-# (STORE-3 / SC-007). NOT a runtime dependency — the runtime stays Polars + PyArrow.
-duckdb = "^1.0"
-pytz = "*"  # test-only: DuckDB needs it to read tz-aware timestamp parquet columns
-
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    # Test-only: proves the .flux/ store is glob-readable by an external engine
+    # (STORE-3 / SC-007). NOT a runtime dependency — the runtime stays Polars + PyArrow.
+    "duckdb>=1.0",
+    "pytz",   # test-only: DuckDB needs it to read tz-aware timestamp parquet columns
+    "faker",  # test/demo-only: seeded value source for scripts/demo_fixture.py (US7)
+]
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+# Flat layout: the project is a set of top-level modules plus a `scripts` namespace
+# package — there is no single import package matching the project name, so the
+# wheel contents are listed explicitly. `dev-mode-dirs` puts the repo root on
+# sys.path for editable installs (`uv sync`), which reproduces exactly how the
+# test suite imports the flat modules today (see TESTS/conftest.py).
+[tool.hatch.build.targets.wheel]
+include = [
+    "changelog.py",
+    "reconstruct.py",
+    "fluxstate.py",
+    "flux_cli.py",
+    "mirror_validator.py",
+    "example.py",
+    "scripts/",
+]
+dev-mode-dirs = ["."]
