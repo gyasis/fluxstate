@@ -138,6 +138,41 @@ reconstruction is held identical to `reconstruct.py` by a parity test.
   `@media print`).
 
 Spec + design: `specs/002-fluxstate-temporal-viewer/` and the locked dev-spec `docs/viewer/fluxstate-viewer-dev-spec.md`.
+Every visual surface is catalogued in **[`docs/VISUALIZATIONS.md`](docs/VISUALIZATIONS.md)**.
+
+### Make a test dataset & open the viewer
+
+**1. Generate a `.flux` store to look at** (any of):
+
+```bash
+uv run flux gen-fixture demo.flux --seed 42                 # the 1000×20 demo (reproducible)
+uv run flux gen-fixture stress100k.flux --rows 100000       # the 100k-entity stress store
+uv run python scripts/schema_churn_demo.py schema_churn.flux  # SCHEMA-EVOLUTION showcase:
+                                                            #   +email(d2) −score(d4)
+                                                            #   name→full_name(d5) +status −region(d6)
+```
+
+The schema-churn store is the one to watch the new column add/drop/rename behavior (issue #6):
+scrub the slider and a dropped column reads NULL from its drop date on (no stale "ghost"), a rename
+shows the old column empty and the new one filled.
+
+**2. Open it in the viewer:**
+
+```bash
+uv run flux serve demo.flux            # boots Vite over the store, opens the browser
+# or, manually:
+cd viewer && npm run dev               # http://localhost:5173  (serves viewer/public/demo.flux by default)
+```
+
+**3. Point the viewer at a non-default store** — copy the `<name>.flux/` folder into `viewer/public/`,
+then load it via the `?store=` query param:
+
+```bash
+cp -r schema_churn.flux viewer/public/
+# open:  http://localhost:5173/?store=schema_churn.flux
+```
+
+With no `?store=`, the viewer loads `/demo.flux`. `.flux` stores are git-ignored (generated, reproducible).
 
 ## Tech Stack
 

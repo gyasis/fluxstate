@@ -99,6 +99,12 @@ The `manifest.json` schema is a **union with valid-time semantics** — a column
 view whose time falls in its lifetime. No schema migration or store rebuild is needed; it's all
 append-only.
 
+> **See it live:** `uv run python scripts/schema_churn_demo.py schema_churn.flux` builds a small
+> store that adds `email`, drops `score`, renames `name → full_name`, then adds `status` / drops
+> `region` across six captures — exactly the Table-Gen churn case. Open it with
+> `?store=schema_churn.flux` (see the README "Make a test dataset" section) and scrub to watch a
+> dropped column go NULL (no ghost) and a rename move from the old column to the new.
+
 ### What the viewer guarantees to a consumer
 
 - **Deterministic row order** — mirror-view rows are key-sorted on both the Python and JS sides, so a
