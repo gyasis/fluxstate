@@ -555,6 +555,63 @@ class ChangeLogStore:
             index="entity_id", on=list(dtypes), variable_name="field", value_name="value"
         )
 
+    # --- schema-evolution tombstones (column drop) -------------------------- #
+    def _dropped_field_events(
+        self,
+        df: pl.DataFrame,
+        key_column: str,
+        prior_schema: dict,
+        timestamp: datetime,
+        snap_id: str,
+    ) -> pl.DataFrame:
+        """Field-level null events for columns dropped from the monitored schema.
+
+        A column in the store's union schema but absent from the incoming snapshot
+        is being dropped. For each currently-live entity still holding a non-null
+        value for that column, emit one null-value event so reconstruction returns
+        NULL (not the stale last value) for the column at/after ``timestamp``.
+        Idempotent: once tombstoned the live value is null, so re-capturing a snapshot
+        that still omits the column finds nothing to tombstone.
+        """
+        dropped = [c for c in prior_schema if c != key_column and c not in df.columns]
+        if not dropped:
+            return pl.DataFrame(schema=change_event_schema())
+
+        # Materialize the current live state for just the dropped columns (+ key).
+        # decode types here are irrelevant (we only test null-ness) — but a valid
+        # typed schema is required, so map each stored tag back to a Polars dtype.
+        sub_schema: dict = {key_column: tag_to_dtype(prior_schema[key_column])}
+        for c in dropped:
+            sub_schema[c] = tag_to_dtype(prior_schema[c])
+        prev = self._materialize_current(sub_schema, key_column)
+        if prev is None or prev.is_empty():
+            return pl.DataFrame(schema=change_event_schema())
+
+        parts: list[pl.DataFrame] = []
+        for c in dropped:
+            live = prev.filter(pl.col(c).is_not_null())
+            if live.is_empty():
+                continue
+            parts.append(
+                pl.DataFrame({"entity_id": live[key_column].cast(pl.Utf8)}).with_columns(
+                    pl.lit(c).alias("field"),
+                    pl.lit(None, dtype=pl.Utf8).alias("value"),
+                    pl.lit(prior_schema[c]).alias("dtype"),
+                )
+            )
+        if not parts:
+            return pl.DataFrame(schema=change_event_schema())
+
+        combined = pl.concat(parts, how="vertical")
+        return combined.select(
+            pl.col("entity_id"),
+            pl.lit(to_utc(timestamp)).cast(pl.Datetime("us", "UTC")).alias("timestamp"),
+            pl.col("field"),
+            pl.col("value").cast(pl.Utf8),
+            pl.col("dtype").cast(pl.Utf8),
+            pl.lit(snap_id).alias("snapshot_id"),
+        ).cast(change_event_schema())
+
     # --- capture (T015) ----------------------------------------------------- #
     def capture(
         self, df: pl.DataFrame, key_column: str, captured_at: Optional[datetime] = None
@@ -568,6 +625,16 @@ class ChangeLogStore:
         """
         if key_column not in df.columns:
             raise ValueError(f"key_column {key_column!r} not in frame columns {df.columns}")
+
+        # A null key value is committed to parquet but is never reconstructable:
+        # entity_id is cast to "null" on write and the reader filters by the string
+        # key, so the row is silently lost. Reject it up front (each entity needs a
+        # non-null key).
+        if df.height and df[key_column].null_count() > 0:
+            raise ValueError(
+                f"key_column {key_column!r} has null value(s) — a null key cannot be "
+                f"reconstructed; every entity must have a non-null key"
+            )
 
         # A snapshot is a keyed wide table: each entity must appear at most once.
         # Duplicate keys silently emit conflicting events for the same cell at the
@@ -583,13 +650,40 @@ class ChangeLogStore:
         snap = snapshot_id(df, key_column)
 
         manifest = self.read_manifest()
+        # Detect a column-set change vs the store's known (union) schema. snapshot_id
+        # hashes row VALUES only (column NAMES are excluded so a pure reorder stays
+        # idempotent), which means a column RENAME with identical values produces the
+        # SAME id. When the column set drifts we must NOT take the idempotency
+        # shortcut below, or the rename/drop is silently dropped.
+        prior_schema = manifest.get("schema") or {}
+        same_key = manifest.get("key_column") == key_column
+        prior_cols = {c for c in prior_schema if c != key_column}
+        new_cols = {c for c in df.columns if c != key_column}
+        schema_changed = bool(manifest["events"]) and same_key and prior_cols != new_cols
+
         # Idempotency anti-join at snapshot granularity: this exact snapshot is
-        # already committed → nothing to do.
-        if any(e["snapshot_id"] == snap for e in manifest["events"]):
+        # already committed → nothing to do (unless the column set drifted).
+        if not schema_changed and any(e["snapshot_id"] == snap for e in manifest["events"]):
             return {"events_added": 0, "snapshot_id": snap, "noop": True}
 
         prev = self._materialize_current(df.schema, key_column)
         events = self._diff(prev, df, key_column, timestamp=captured_at, snap_id=snap)
+
+        # A column present in history (union schema) but absent from this snapshot is
+        # being dropped. Without a field-level tombstone its last value would persist
+        # as a ghost in every as-of view AT/AFTER this capture (the A1 union schema
+        # keeps the column resolvable in PAST views; this stops it leaking forward).
+        if same_key:
+            tombstones = self._dropped_field_events(
+                df, key_column, prior_schema, captured_at, snap
+            )
+            if not tombstones.is_empty():
+                events = (
+                    tombstones
+                    if events.is_empty()
+                    else pl.concat([events, tombstones], how="vertical")
+                )
+
         if events.is_empty():
             return {"events_added": 0, "snapshot_id": snap, "noop": True}
 

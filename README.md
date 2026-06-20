@@ -1,6 +1,18 @@
 # FluxState
 
+> **FluxState is a faithful recorder of what the source emits — not a semantic-equality engine.**
+
 > Cell-level Change Data Capture (CDC) system with temporal versioning for healthcare data workflows
+
+### Guiding principle
+
+**FluxState is a faithful recorder of what the source emits, not a semantic-equality engine.**
+It records what changed in the source's *serialized output*, verbatim. If a source emits
+`1.1` one run and `1.10` the next, or shifts a timestamp's timezone representation, that **is**
+a change and FluxState surfaces it — it does not canonicalize values to decide they're "really
+equal." Every value is normalized to a canonical **text** form for storage/comparison, with a
+per-column `dtype` tag carried alongside so a consumer can re-cast when it wants typed
+sort/compare. This is by design: faithfulness over cleverness.
 
 FluxState is a Python library that tracks every cell-level change in database tables with full historical versioning. Designed specifically for healthcare data pipelines at Herself Health, it maintains temporal "mirror tables" where each cell contains a complete audit trail.
 
@@ -146,10 +158,15 @@ Spec + design: `specs/002-fluxstate-temporal-viewer/` and the locked dev-spec `d
 git clone https://github.com/gyasis/fluxstate.git
 cd fluxstate
 
-# Install with uv (recommended)
-uv pip install -e .
+# Install with uv (recommended) — creates .venv and installs the project
+# plus its dev/test group from the committed uv.lock (reproducible).
+uv sync
 
-# Or with pip
+# Run the CLI and tests through the synced env:
+uv run flux --help
+uv run pytest TESTS/ -q
+
+# Or a plain editable install with pip:
 pip install -e .
 ```
 
@@ -208,6 +225,12 @@ fluxstate/
 - **[`docs/API.md`](docs/API.md)** — full API reference + usage guide for the change-log
   system (`FluxState`, `ChangeLogStore`, `reconstruct`), the `.flux/` store layout, the
   manifest, dtype tags, migration notes, and guarantees. Every example is runnable.
+- **[`docs/VISUALIZATIONS.md`](docs/VISUALIZATIONS.md)** — catalogue of every visual surface
+  in the Temporal Ghost viewer (scrubber, as-of diff table, windowed table, inspector, filter,
+  static audit view, anomaly signals): what each shows, the data it needs, and how it behaves.
+- **[`docs/PHAROS_INTEGRATION.md`](docs/PHAROS_INTEGRATION.md)** — how to embed FluxState into
+  Pharos: the library-audit mode (`harbor` pattern), the temporal-view mode (Table Gen),
+  schema-evolution behavior for churning dbt sources, and the integration contract/gotchas.
 
 See `memory-bank/` for comprehensive project documentation:
 - **projectbrief.md** - Core concepts and architecture

@@ -12,7 +12,8 @@
     "2026-01-01T00:00:00+00:00",
     "2026-01-02T00:00:00+00:00",
     "2026-01-03T00:00:00+00:00",
-    "2026-01-04T00:00:00+00:00"
+    "2026-01-04T00:00:00+00:00",
+    "2026-01-05T00:00:00+00:00"
   ],
   "probes": [
     {
@@ -168,6 +169,11 @@
           "date": "2026-01-04T00:00:00+00:00",
           "value": "2026-01-04T00:00:00+00:00",
           "field": "seen"
+        },
+        {
+          "date": "2026-01-05T00:00:00+00:00",
+          "value": null,
+          "field": "__deleted__"
         }
       ],
       "entity_id": "100"
@@ -184,7 +190,7 @@
     {
       "kind": "row_state",
       "expected": {
-        "state": "active",
+        "state": "deleted",
         "resurrected": true
       },
       "entity_id": "100",
@@ -202,7 +208,7 @@
     {
       "kind": "row_state",
       "expected": {
-        "state": "active",
+        "state": "deleted",
         "resurrected": false
       },
       "entity_id": "200",
@@ -210,17 +216,17 @@
     },
     {
       "kind": "change_count",
-      "expected": 12,
+      "expected": 13,
       "entity_id": "100"
     },
     {
       "kind": "change_count",
-      "expected": 5,
+      "expected": 6,
       "entity_id": "200"
     },
     {
       "kind": "change_count",
-      "expected": 4,
+      "expected": 5,
       "entity_id": "300"
     },
     {
@@ -314,29 +320,65 @@
         ],
         "rows": [
           [
-            100,
-            "alice3",
-            9.0,
-            true,
-            "2026-01-04T00:00:00+00:00"
-          ],
-          [
-            200,
-            "bob",
-            null,
-            false,
-            "2026-01-01T00:00:00+00:00"
-          ],
-          [
-            300,
-            "carol",
+            30,
+            "cara",
             3.0,
             true,
-            "2026-01-02T00:00:00+00:00"
+            "2026-01-05T00:00:00+00:00"
+          ],
+          [
+            40,
+            "dan",
+            4.0,
+            false,
+            "2026-01-05T00:00:00+00:00"
+          ],
+          [
+            50,
+            "eve",
+            5.0,
+            true,
+            "2026-01-05T00:00:00+00:00"
           ]
         ]
       },
       "T": null
+    },
+    {
+      "kind": "build_mirror_view",
+      "expected": {
+        "columns": [
+          "id",
+          "name",
+          "score",
+          "flag",
+          "seen"
+        ],
+        "rows": [
+          [
+            30,
+            "cara",
+            3.0,
+            true,
+            "2026-01-05T00:00:00+00:00"
+          ],
+          [
+            40,
+            "dan",
+            4.0,
+            false,
+            "2026-01-05T00:00:00+00:00"
+          ],
+          [
+            50,
+            "eve",
+            5.0,
+            true,
+            "2026-01-05T00:00:00+00:00"
+          ]
+        ]
+      },
+      "T": "2026-01-05T00:00:00+00:00"
     }
   ],
   "must_include_cases": {
@@ -513,6 +555,126 @@
       "value": "2026-01-04T00:00:00+00:00",
       "dtype": "datetime[us, UTC]",
       "snapshot_id": "911c0f0df4932e6e"
+    },
+    {
+      "entity_id": "100",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "__deleted__",
+      "value": null,
+      "dtype": "null",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "200",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "__deleted__",
+      "value": null,
+      "dtype": "null",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "30",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "flag",
+      "value": "true",
+      "dtype": "bool",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "30",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "name",
+      "value": "cara",
+      "dtype": "utf8",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "30",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "score",
+      "value": "3.0",
+      "dtype": "float64",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "30",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-05T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "300",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "__deleted__",
+      "value": null,
+      "dtype": "null",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "40",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "flag",
+      "value": "false",
+      "dtype": "bool",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "40",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "name",
+      "value": "dan",
+      "dtype": "utf8",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "40",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "score",
+      "value": "4.0",
+      "dtype": "float64",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "40",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-05T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "50",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "flag",
+      "value": "true",
+      "dtype": "bool",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "50",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "name",
+      "value": "eve",
+      "dtype": "utf8",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "50",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "score",
+      "value": "5.0",
+      "dtype": "float64",
+      "snapshot_id": "4f748d9f3d40d469"
+    },
+    {
+      "entity_id": "50",
+      "timestamp": "2026-01-05T00:00:00+00:00",
+      "field": "seen",
+      "value": "2026-01-05T00:00:00+00:00",
+      "dtype": "datetime[us, UTC]",
+      "snapshot_id": "4f748d9f3d40d469"
     }
   ]
 }

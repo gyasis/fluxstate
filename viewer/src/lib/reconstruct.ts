@@ -114,6 +114,12 @@ export function decodeValue(value: string | null, dtype: string): Typed {
     return Number.isSafeInteger(n) ? n : BigInt(value);
   }
   if (d.startsWith("float")) {
+    // Python encodes non-finite floats via repr(): 'inf' / '-inf' / 'nan'.
+    // JS Number('inf') is NaN, so map the special tokens explicitly to match
+    // Python's decode — otherwise a stored ±Infinity displays as NaN (audit F-INF).
+    if (value === "inf") return Infinity;
+    if (value === "-inf") return -Infinity;
+    if (value === "nan") return NaN;
     return Number(value);
   }
   if (d === "bool" || d === "boolean") {
@@ -177,9 +183,10 @@ export function _asOf(history: TimelinePoint[], T: Date): AsOfValue | null {
   for (const entry of history) {
     if (entry.date.getTime() <= tMs) {
       result = { date: entry.date, value: entry.value };
-    } else {
-      break;
     }
+    // No early break: scan the whole history so the result is order-independent,
+    // matching Python `_as_of` (audit A4). Internal callers pass sorted input;
+    // this keeps the exported fn correct for unsorted history too.
   }
   return result;
 }
@@ -286,6 +293,27 @@ export function rowState(
  * state (no upper bound). Columns are `[keyColumn, ...trackedFields]` in
  * schema order; a field never set for an entity decodes to `null`.
  */
+/**
+ * Compare two decoded key values for deterministic mirror-view row ordering
+ * (issue #4 — must match Polars `df.sort(key_column)` on the Python side).
+ * Keys are unique and non-null, so no tie-breaking is needed.
+ */
+function compareKeys(a: Typed, b: Typed): number {
+  if (typeof a === "bigint" || typeof b === "bigint") {
+    const A = typeof a === "bigint" ? a : BigInt(Math.trunc(a as number));
+    const B = typeof b === "bigint" ? b : BigInt(Math.trunc(b as number));
+    return A < B ? -1 : A > B ? 1 : 0;
+  }
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  if (a instanceof Date && b instanceof Date) return a.getTime() - b.getTime();
+  if (typeof a === "boolean" && typeof b === "boolean") {
+    return (a ? 1 : 0) - (b ? 1 : 0);
+  }
+  const sa = String(a);
+  const sb = String(b);
+  return sa < sb ? -1 : sa > sb ? 1 : 0;
+}
+
 export function buildMirrorView(
   events: RawChangeEvent[],
   schema: Record<string, string>,
@@ -331,6 +359,8 @@ export function buildMirrorView(
     rows.push(row);
   }
 
+  // Deterministic key-sorted row order (issue #4) — matches Python build_mirror_view.
+  rows.sort((a, b) => compareKeys(a[keyColumn], b[keyColumn]));
   return { columns, rows };
 }
 
@@ -600,6 +630,8 @@ export function buildMirrorViewIndexed(
     rows.push(row);
   }
 
+  // Deterministic key-sorted row order (issue #4) — matches Python build_mirror_view.
+  rows.sort((a, b) => compareKeys(a[keyColumn], b[keyColumn]));
   return { columns, rows };
 }
 
@@ -782,6 +814,12 @@ export function changeDirection(prev: Typed, next: Typed): ChangeDirection {
     const a = prev.getTime();
     const b = next.getTime();
     const dir = b > a ? "up" : b < a ? "down" : "same";
+    return { dir, delta: null };
+  }
+  // Large int64 values (|v| > 2^53-1) decode to BigInt, not number — still give
+  // them a direction arrow (delta omitted: bigint - bigint isn't a number). (F-DIR)
+  if (typeof prev === "bigint" && typeof next === "bigint") {
+    const dir = next > prev ? "up" : next < prev ? "down" : "same";
     return { dir, delta: null };
   }
   return { dir: "na", delta: null };

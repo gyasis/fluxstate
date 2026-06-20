@@ -105,3 +105,93 @@ def test_f5_invalid_at_is_clean_error(tmp_path):
     assert r.returncode != 0
     assert "Traceback" not in r.stderr
     assert "invalid" in r.stderr.lower()
+
+
+# =========================================================================== #
+# 2026-06-20 pharos pre-integration audit (schema churn + data-loss findings) #
+# =========================================================================== #
+
+# --- F-DROP: a dropped column must read as NULL at/after the drop (no ghost) - #
+def test_fdrop_dropped_column_is_null_after_drop(tmp_path):
+    s = _store(tmp_path)
+    s.capture(pl.DataFrame({"id": [1, 2], "name": ["a", "b"], "score": [99.0, 88.0]}), "id", captured_at=T1)
+    s.capture(pl.DataFrame({"id": [1, 2], "name": ["a", "b"]}), "id", captured_at=T2)  # score dropped
+
+    # Before the drop: the value is intact (A1 union schema).
+    before = reconstruct.build_mirror_view(s, T=T1)
+    assert before.filter(pl.col("id") == 1)["score"][0] == 99.0
+    # At/after the drop: the column reads NULL, not the stale "ghost" value.
+    after = reconstruct.build_mirror_view(s, T=T2)
+    assert after.filter(pl.col("id") == 1)["score"][0] is None
+    assert after.filter(pl.col("id") == 2)["score"][0] is None
+
+
+def test_fdrop_redropping_same_snapshot_is_noop(tmp_path):
+    s = _store(tmp_path)
+    s.capture(pl.DataFrame({"id": [1], "name": ["a"], "score": [1.0]}), "id", captured_at=T1)
+    s.capture(pl.DataFrame({"id": [1], "name": ["a"]}), "id", captured_at=T2)
+    # Re-capturing the already-dropped snapshot emits no new tombstones.
+    r = s.capture(pl.DataFrame({"id": [1], "name": ["a"]}), "id",
+                  captured_at=datetime(2026, 1, 3, tzinfo=timezone.utc))
+    assert r["noop"] is True and r["events_added"] == 0
+
+
+# --- F-RENAME: rename with identical values must NOT be a silent no-op ------- #
+def test_frename_same_values_recorded_as_drop_plus_add(tmp_path):
+    s = _store(tmp_path)
+    s.capture(pl.DataFrame({"id": [1], "price": [100.0]}), "id", captured_at=T1)
+    r = s.capture(pl.DataFrame({"id": [1], "new_price": [100.0]}), "id", captured_at=T2)
+    assert r["noop"] is False, "a column rename (same values) was silently dropped"
+
+    v = reconstruct.build_mirror_view(s, T=T2)
+    assert v.filter(pl.col("id") == 1)["new_price"][0] == 100.0
+    assert "price" not in v.columns or v.filter(pl.col("id") == 1)["price"][0] is None
+
+
+# --- F-NULLKEY: a null key value must be rejected (else silent data loss) ---- #
+def test_fnullkey_null_key_rejected(tmp_path):
+    s = _store(tmp_path)
+    df = pl.DataFrame({"id": [None, 1], "val": ["a", "b"]}, schema={"id": pl.Int64, "val": pl.Utf8})
+    with pytest.raises(ValueError, match="null"):
+        s.capture(df, "id")
+
+
+# --- F-CLI: capture must give a clean error (not a traceback) on bad input --- #
+def test_fcli_capture_missing_input_is_clean_error(tmp_path):
+    r = _cli("capture", str(tmp_path / "s.flux"), str(tmp_path / "nope.parquet"), "--key", "id")
+    assert r.returncode != 0
+    assert "Traceback" not in r.stderr, "missing input file must not dump a raw traceback"
+
+
+def test_fcli_capture_bad_key_is_clean_error(tmp_path):
+    snap = tmp_path / "snap.parquet"
+    pl.DataFrame({"id": [1], "v": [10]}).write_parquet(snap)
+    r = _cli("capture", str(tmp_path / "s.flux"), str(snap), "--key", "missing_col")
+    assert r.returncode != 0
+    assert "Traceback" not in r.stderr, "a bad --key must not dump a raw traceback"
+    assert "flux:" in r.stderr.lower()
+
+
+# --- #4: same-timestamp entities reconstruct in deterministic key order ------ #
+def test_issue4_mirror_view_row_order_is_key_sorted(tmp_path):
+    s = _store(tmp_path)
+    # Capture entities at ONE timestamp in REVERSE id order.
+    s.capture(pl.DataFrame({"id": [50, 40, 30], "v": [5, 4, 3]}), "id", captured_at=T1)
+    ids = reconstruct.build_mirror_view(s, "now")["id"].to_list()
+    assert ids == [30, 40, 50], f"mirror-view rows must be key-sorted, got {ids}"
+
+
+# --- #3: the STORE is a faithful recorder — full µs survives round-trip ------ #
+# (The viewer renders datetime VALUE cells at date/ms resolution by design — a
+#  VIEW, not the recorder — but the store itself must never lose precision.)
+def test_issue3_store_preserves_microsecond_precision(tmp_path):
+    s = _store(tmp_path)
+    ts = datetime(2026, 1, 1, 12, 0, 0, 123456, tzinfo=timezone.utc)
+    s.capture(
+        pl.DataFrame({"id": pl.Series([1], dtype=pl.Int64),
+                      "seen": pl.Series([ts], dtype=pl.Datetime("us", "UTC"))}),
+        "id", captured_at=T1,
+    )
+    got = reconstruct.as_of(s, 1, "seen", T2)["value"]
+    assert got == ts, "the store must preserve full microsecond precision"
+    assert got.microsecond == 123456

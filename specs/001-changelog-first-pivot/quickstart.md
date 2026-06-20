@@ -11,8 +11,7 @@ doubles as a manual smoke checklist.
 
 ```bash
 cd ~/Documents/code/fluxstate
-uv venv && source .venv/bin/activate     # or: poetry install
-uv pip install -e .                       # deps: polars, pyarrow, orjson, numpy, humanize, tqdm
+uv sync                                   # deps from uv.lock: polars, pyarrow, orjson, numpy, humanize, tqdm (+ dev group)
 ```
 No new runtime dependency is added in P1. Tests run **without** Snowflake (in-memory `pl.DataFrame`).
 

@@ -141,7 +141,11 @@ def build_mirror_view(store: ChangeLogStore, T: str | datetime = "now") -> pl.Da
     if view is None:
         # No state at/before T → empty frame, but keep the table's columns/types.
         return pl.DataFrame(schema=pl_schema)
-    return view
+    # Deterministic row order by key (issue #4): without this, the row order for
+    # entities sharing one timestamp follows insertion/pivot order, which is
+    # implementation-defined and diverged from the JS viewer. Sorting by the key
+    # on BOTH sides makes the mirror-view row order a stable, matching contract.
+    return view.sort(key_column)
 
 
 # --------------------------------------------------------------------------- #

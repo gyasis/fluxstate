@@ -121,10 +121,20 @@ def cmd_capture(args: argparse.Namespace) -> int:
     if err:
         print(err, file=sys.stderr)
         return 2
-    df = _load_frame(args.input)
+    # Clean message + exit 2 (not a raw traceback) for the common input errors:
+    # a missing/unsupported input file, or a bad --key (missing/duplicate/null).
+    try:
+        df = _load_frame(args.input)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print(f"flux: {exc}", file=sys.stderr)
+        return 2
     captured_at = datetime.fromisoformat(args.at) if args.at else None
     store = ChangeLogStore(args.store)
-    result = store.capture(df, key_column=args.key, captured_at=captured_at)
+    try:
+        result = store.capture(df, key_column=args.key, captured_at=captured_at)
+    except ValueError as exc:
+        print(f"flux: {exc}", file=sys.stderr)
+        return 2
     if args.json:
         _emit_json(result)
     else:

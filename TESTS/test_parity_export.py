@@ -123,6 +123,18 @@ def _build_known_store(store_path: Path) -> ChangeLogStore:
         ),
         key_column="id", captured_at=_utc(2026, 1, 4),
     )
+    # day5: three NEW entities in ONE capture at an IDENTICAL timestamp, in
+    #       REVERSE id order — exercises mirror-view row-order parity for
+    #       same-timestamp entities (issue #4). The day5 + "now" probes assert
+    #       Python and JS agree on the row order for this batch.
+    store.capture(
+        frame(
+            [50, 40, 30], ["eve", "dan", "cara"], [5.0, 4.0, 3.0],
+            [True, False, True],
+            [_utc(2026, 1, 5), _utc(2026, 1, 5), _utc(2026, 1, 5)],
+        ),
+        key_column="id", captured_at=_utc(2026, 1, 5),
+    )
     return store
 
 
@@ -229,6 +241,11 @@ def _build_ground_truth(store: ChangeLogStore) -> dict:
         _mirror_to_obj(reconstruct.build_mirror_view(store, T_day3)), T=T_day3)  # 100 deleted
     add("build_mirror_view",
         _mirror_to_obj(reconstruct.build_mirror_view(store, "now")), T=T_now)    # 100 back
+    # issue #4: row order for entities sharing ONE timestamp (ids 50/40/30,
+    # captured in reverse order at day5) must match between Python and JS.
+    T_day5 = _utc(2026, 1, 5)
+    add("build_mirror_view",
+        _mirror_to_obj(reconstruct.build_mirror_view(store, T_day5)), T=T_day5)
 
     # --- coverage assertions (the export MUST exercise these) ---
     deleted = reconstruct.row_state(store, 100, T_day3)

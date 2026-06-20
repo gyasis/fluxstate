@@ -10,8 +10,8 @@ How the Viewer is run and validated. Doubles as a manual smoke checklist; mirror
 
 ```bash
 cd ~/Documents/code/fluxstate
-uv pip install -e .                 # runtime unchanged (Polars + PyArrow)
-uv pip install faker numpy duckdb pytz pytest   # demo/test-only deps (NOT runtime)
+uv sync                             # runtime + dev/test deps from uv.lock (reproducible)
+# then prefix commands with `uv run` (e.g. `uv run flux ...`, `uv run pytest`)
 # viewer:
 cd viewer && npm install            # Svelte 5 + Vite + DuckDB-WASM
 ```
