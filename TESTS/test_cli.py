@@ -254,5 +254,46 @@ def test_cli_gen_fixture_reproducible(capsys, tmp_path):
     )
 
 
+def test_cli_compare_ab_counts(capsys, tmp_path):
+    """CLI-5: `flux compare A B --key …` builds a 2-capture store and reports the A/B diff.
+
+    P1 changes (status+score), P3 drops, P4 is added, P2 is unchanged → +1/−1/~1, and the
+    store ends with exactly two captures (what the Pharos compare view needs).
+    """
+    store_path = tmp_path / "cmp.flux"
+    before = tmp_path / "before.parquet"
+    after = tmp_path / "after.parquet"
+    _frame([1, 2, 3], ["P1", "P2", "P3"], [1.0, 2.0, 3.0]).write_parquet(before)
+    _frame([1, 2, 4], ["P1", "P2", "P4"], [9.0, 2.0, 4.0]).write_parquet(after)
+
+    code, out = _run(capsys, ["compare", str(store_path), str(before), str(after),
+                              "--key", "id", "--json"])
+    assert code == 0
+    r = json.loads(out)
+    assert r["captures"] == 2
+    assert (r["added"], r["dropped"], r["changed"], r["unchanged"]) == (1, 1, 1, 1)
+    assert len(ChangeLogStore(store_path).read_manifest()["events"]) == 2
+
+
+def test_cli_compare_composite_key(capsys, tmp_path):
+    """CLI-6: multiple `--key` cols synthesize a null-safe composite `row_key`; a
+    non-unique composite key fails loudly (exit 2)."""
+    store_path = tmp_path / "cmp2.flux"
+    before = tmp_path / "b.parquet"
+    after = tmp_path / "a.parquet"
+    _frame([1, 2], ["P1", "P1"], [1.0, 2.0]).write_parquet(before)  # id+name unique
+    _frame([1, 2], ["P1", "P1"], [1.0, 9.0]).write_parquet(after)
+
+    code, out = _run(capsys, ["compare", str(store_path), str(before), str(after),
+                              "--key", "id", "name", "--json"])
+    assert code == 0
+    assert json.loads(out)["key"] == "row_key"
+
+    # name alone is NOT unique → composite collapses → clear failure, not a silent miscount.
+    dup = tmp_path / "dup.flux"
+    code, _ = _run(capsys, ["compare", str(dup), str(before), str(after), "--key", "name"])
+    assert code == 2
+
+
 # Re-export the CLI's JSON normalizer so library returns are compared on equal footing.
 _jsonify = flux_cli._jsonify

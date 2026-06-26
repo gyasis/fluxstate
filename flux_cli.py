@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, Sequence
 
@@ -141,6 +141,88 @@ def cmd_capture(args: argparse.Namespace) -> int:
         for k in ("noop", "events_added", "snapshot_id", "file"):
             if k in result:
                 print(f"{k}={result[k]}")
+    return 0
+
+
+def _compose_key(df: pl.DataFrame, keys: Sequence[str], dest: str) -> pl.DataFrame:
+    """One composite key column from one-or-more columns (null-safe ``a|b|c``). A single key that
+    already equals ``dest`` is left as-is; otherwise the synthesized column is added/overwritten."""
+    if len(keys) == 1 and keys[0] == dest:
+        return df
+    return df.with_columns(
+        pl.concat_str([pl.col(k).cast(pl.Utf8).fill_null("") for k in keys], separator="|").alias(dest)
+    )
+
+
+def _diff_counts(before: pl.DataFrame, after: pl.DataFrame, key: str) -> dict:
+    """A/B set-diff on ``key`` + cell change on the shared non-key columns (added/dropped/changed)."""
+    cmp_cols = [c for c in before.columns if c != key and c in after.columns]
+    bm = {r[key]: r for r in before.iter_rows(named=True)}
+    am = {r[key]: r for r in after.iter_rows(named=True)}
+    bk, ak = set(bm), set(am)
+    matched = bk & ak
+    changed = sum(1 for k in matched if any(bm[k].get(c) != am[k].get(c) for c in cmp_cols))
+    return {"before": len(bk), "after": len(ak), "added": len(ak - bk),
+            "dropped": len(bk - ak), "changed": changed, "unchanged": len(matched) - changed}
+
+
+def cmd_compare(args: argparse.Namespace) -> int:
+    """``flux compare <store> <before> <after> --key <col...>`` → a 2-capture A/B ``.flux`` store.
+
+    Captures ``before`` then ``after`` as the two snapshots a 2-capture store needs for the Pharos
+    compare view (Before·Δ·After). ``--key`` is one or more columns; >1 ⇒ a null-safe composite key
+    (``--key-name``, default ``row_key``). Errors clearly if the key is not unique (add more --key cols).
+    Prints the diff summary (+added/−dropped/~changed). Point a Pharos flux source at the store to view.
+    """
+    for a in (args.at_before, args.at_after):
+        err = _check_iso(a, "--at-before/--at-after", allow_now=False)
+        if err:
+            print(err, file=sys.stderr)
+            return 2
+    try:
+        before = _load_frame(args.before)
+        after = _load_frame(args.after)
+    except (FileNotFoundError, OSError, ValueError) as exc:
+        print(f"flux: {exc}", file=sys.stderr)
+        return 2
+    keys: list[str] = list(args.key)
+    missing = [k for k in keys if k not in before.columns or k not in after.columns]
+    if missing:
+        print(f"flux: --key column(s) not in both inputs: {missing}", file=sys.stderr)
+        return 2
+    dest = args.key_name or (keys[0] if len(keys) == 1 else "row_key")
+    before = _compose_key(before, keys, dest)
+    after = _compose_key(after, keys, dest)
+    for label, df in (("before", before), ("after", after)):
+        if df.height and df[dest].is_duplicated().any():
+            n = int(df[dest].is_duplicated().sum())
+            print(f"flux: key {dest!r} is not unique in {label} ({n} duplicate rows) — add more --key columns",
+                  file=sys.stderr)
+            return 2
+    at_b = datetime.fromisoformat(args.at_before) if args.at_before else datetime(1970, 1, 1, tzinfo=timezone.utc)
+    at_a = datetime.fromisoformat(args.at_after) if args.at_after else datetime(1970, 1, 2, tzinfo=timezone.utc)
+    store = ChangeLogStore(args.store)
+    try:
+        r1 = store.capture(before, key_column=dest, captured_at=at_b)
+        r2 = store.capture(after, key_column=dest, captured_at=at_a)
+    except ValueError as exc:
+        print(f"flux: {exc}", file=sys.stderr)
+        return 2
+    counts = _diff_counts(before, after, dest)
+    out = {
+        "store": str(Path(args.store).resolve()), "key": dest, "captures": 2,
+        "before_events": r1.get("events_added"), "after_events": r2.get("events_added"), **counts,
+    }
+    if args.json:
+        _emit_json(out)
+    else:
+        print(f"store: {out['store']}")
+        print(f"key:   {dest}   captures: 2 (before → after)")
+        print(f"+ added:    {counts['added']}")
+        print(f"- dropped:  {counts['dropped']}")
+        print(f"~ changed:  {counts['changed']}")
+        print(f"= unchanged:{counts['unchanged']}")
+        print(f"\nView it: point a Pharos `.viz.pkl` flux source at {out['store']} (2 captures ⇒ compare view).")
     return 0
 
 
@@ -378,6 +460,27 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--at", metavar="<ISO>", help="captured-at timestamp (ISO 8601)")
     p.add_argument("--json", action="store_true", help="machine-readable JSON output")
     p.set_defaults(func=cmd_capture)
+
+    # compare
+    p = sub.add_parser(
+        "compare",
+        help="build a 2-capture A/B store (before, after) for the Pharos compare view",
+    )
+    p.add_argument("store", metavar="<store.flux>", help="path to the .flux store (created/extended)")
+    p.add_argument("before", metavar="<before.parquet|csv>", help="the OLD / A snapshot")
+    p.add_argument("after", metavar="<after.parquet|csv>", help="the NEW / B snapshot")
+    p.add_argument(
+        "--key", required=True, action="extend", nargs="+", metavar="<col>",
+        help="key column(s); >1 ⇒ a null-safe composite key",
+    )
+    p.add_argument(
+        "--key-name", metavar="<col>",
+        help="name for the synthesized composite key column (default: row_key)",
+    )
+    p.add_argument("--at-before", metavar="<ISO>", help="captured-at for the before snapshot (ISO 8601)")
+    p.add_argument("--at-after", metavar="<ISO>", help="captured-at for the after snapshot (ISO 8601)")
+    p.add_argument("--json", action="store_true", help="machine-readable JSON output")
+    p.set_defaults(func=cmd_compare)
 
     # travel
     p = sub.add_parser("travel", help="reconstruct the table as-of a point in time")
