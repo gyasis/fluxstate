@@ -31,6 +31,13 @@ ENV/
 .idea/
 *.swp
 *.swo
+
+# Agent-state directories (transcript / memory leak surfaces)
+.specstory/
+.memory/
+.aider*
+.cursor/
+.windsurf/
 *~
 
 # Testing

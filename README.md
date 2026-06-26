@@ -108,6 +108,7 @@ Drive the whole change-log from the terminal (no code needed):
 
 ```bash
 flux capture <store.flux> <input.parquet|csv> --key id [--at <ISO>]  # append-only capture
+flux compare <store.flux> <before.csv> <after.csv> --key id [--key …] # 2-capture A/B store → Pharos compare view
 flux travel <store.flux> --as-of 2026-03-01T00:00:00Z               # reconstruct table as-of T (typed)
 flux timeline <store.flux> <id> [--field risk]                       # per-cell history [{date,value}]
 flux row-state <store.flux> <id> [--as-of now]                       # {state, resurrected}
