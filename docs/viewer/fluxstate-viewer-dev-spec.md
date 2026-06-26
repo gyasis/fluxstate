@@ -71,6 +71,25 @@ trail no two-table diff can produce.
 - Non-interactive: latest value + ghost subtext (prior value + ↑/↓), leading lifecycle
   spark-path column, auto-callouts on the most volatile cells. `@media print` ready.
 
+### 2.6 Compare strategy — 2-capture A/B (added)
+A store with **exactly two captures** is an **A/B comparison**, not a time series — two discrete states
+cannot be a continuous play-scrubber. The viewer picks a **strategy** from the data **state**: `compare`
+for 2 captures, the `timeseries` "Temporal Ghost" (§2.1–2.5) for >2. The timeseries model is unchanged.
+
+In `compare`:
+- The time control becomes a **discrete 3-chapter stepper** — **Before · Δ changes · After** — *not* a
+  draggable/playing track. No play, no loop, no timer. Each chapter is a **crisp step (no fade)**.
+- **Before / After** = each capture's as-of state (clean snapshot, diff off).
+- **Δ changes** = the data-change state, reusing the §2.2 diff-on-scrub engine at `prev=Before,
+  value=After`: **ADD** → `ø→new`, **CHG** → `old→new` (its change-fade is **preserved/pinned** on Δ —
+  landing on Δ must not strip it), **DROP** → the §2.4 deleted encoding (stripe/strikethrough). A footer
+  tallies **+added · −dropped · ~changed**.
+- Membership uses lifecycle **state** (`active`); an **unborn** row (no events at Before) counts as ADD,
+  not changed.
+
+Applies to **this repo's `viewer/`** and to Pharos's `FluxQuickTable.svelte`. Reference implementation:
+Pharos #238 (verified on a synthetic 2-capture demo + a real A/B store).
+
 ---
 
 ## 3. Data contract
