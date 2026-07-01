@@ -304,6 +304,9 @@ fluxstate/
 - **[`AGENTS.md`](AGENTS.md)** — the fast orientation for a coding agent: the mental model,
   the two-file storage model, the full library + CLI surface, storage targets (local /
   object-store / Databricks), and the flat skills in [`skills/`](skills/).
+- **[`docs/DATABRICKS.md`](docs/DATABRICKS.md)** — runbook for tracking a Databricks view's daily
+  deltas: the works-today library-on-a-Job + Volume-sync pattern, the planned `[databricks]` Delta
+  sidecar, the two-table (`flux_events` + `flux_mirror`) contract, and Spark-SQL as-of reconstruction.
 
 ## Development
 
