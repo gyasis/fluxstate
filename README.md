@@ -2,7 +2,11 @@
 
 > **FluxState is a faithful recorder of what the source emits — not a semantic-equality engine.**
 
-> Cell-level Change Data Capture (CDC) system with temporal versioning for healthcare data workflows
+> Cell-level Change Data Capture (CDC) with temporal versioning for any tabular data.
+
+> **tl;dr** — give it successive typed snapshots → it stores only the cell-level diffs as immutable,
+> glob-readable Parquet → ask for any column / cell / row / whole-table state at any timestamp, with
+> exact types and full delete/resurrect lineage.
 
 ### Guiding principle
 
@@ -14,7 +18,14 @@ equal." Every value is normalized to a canonical **text** form for storage/compa
 per-column `dtype` tag carried alongside so a consumer can re-cast when it wants typed
 sort/compare. This is by design: faithfulness over cleverness.
 
-FluxState is a Python library that tracks every cell-level change in database tables with full historical versioning. Designed specifically for healthcare data pipelines at Herself Health, it maintains temporal "mirror tables" where each cell contains a complete audit trail.
+FluxState is a Python library that tracks every cell-level change in **any** table with full historical
+versioning — one table or many, narrow or wide. Because it records only the *deltas* (the changed cells)
+as an append-only Parquet log, the store stays **lean in disk and memory**: it grows with how much your
+data actually *changes*, not with table-size × number-of-captures — so history never balloons into a heavy,
+ever-growing tech stack, and it stays lossless (every value kept at full fidelity, restorable to its
+original type). It was first built for healthcare pipelines at Herself Health (HIPAA-grade audit trails),
+but the model is domain-agnostic — any source that emits successive snapshots gets the same per-cell audit
+trail and time-travel.
 
 ## Core Concept
 
@@ -42,6 +53,30 @@ The store is plain Parquet — **glob-readable by any engine** with no FluxState
 ```sql
 SELECT * FROM '<name>.flux/events/*.parquet';   -- DuckDB / DuckDB-WASM / Polars
 ```
+
+### Why two file kinds — deltas + a manifest (the storage win)
+
+FluxState used to store history as a **"mirror table" with the audit trail embedded
+JSON-in-cell** — every cell carried its own complete change-history blob, so the file *was*
+the whole table plus all its past, rewritten on every capture. The **changelog-first pivot**
+(`001-changelog-first-pivot`) flipped that: a `.flux/` store is now just **two kinds of
+files** — a tiny **`manifest.json`** (the authoritative index: schema union `col→dtype`, the
+`key_column`, and the list of event files with their `ts_min/ts_max` + `snapshot_id`) and one
+or more **`events/<ts>.parquet` delta files**, where each capture appends **one immutable
+Parquet holding only the changed cells** as change-events `(entity_id, timestamp, field, value,
+dtype, snapshot_id)`. The old "mirror table" is now a **view reconstructed on read**, so the
+public API is unchanged — but nothing stores the full table per capture anymore.
+
+**Why it matters for disk:** the old model grew with **table-size × number-of-captures** and
+did **whole-file rewrites** every run (JSON-in-cell blobs balloon fast). The delta model grows
+only with **how much your data actually *changes*** — an unchanged cell costs nothing, a capture
+with three changed cells writes three event rows, and existing Parquet is **never rewritten**
+(append-only, immutable). It stays **lossless** (canonical text + a `dtype` tag re-casts to the
+exact original type) and **idempotent** (a content-derived `snapshot_id` anti-join makes
+re-capturing identical data a no-op — no duplicate files), while remaining plain **glob-readable
+Parquet** with **no Delta/Iceberg/Snowflake dependency tail**. Net: full per-cell time-travel and
+delete/resurrect lineage at a fraction of the disk, because you store the *diffs*, not a fresh
+copy of the world each time.
 
 ## Why FluxState?
 
@@ -252,8 +287,7 @@ fluxstate/
 ├── scripts/
 │   ├── Hcc_capture.py
 │   └── PATIENT.py
-├── TESTS/                   # Unit tests
-└── memory-bank/             # Project documentation
+└── TESTS/                   # Unit tests
 ```
 
 ## Documentation
@@ -267,12 +301,9 @@ fluxstate/
 - **[`docs/PHAROS_INTEGRATION.md`](docs/PHAROS_INTEGRATION.md)** — how to embed FluxState into
   Pharos: the library-audit mode (`harbor` pattern), the temporal-view mode (Table Gen),
   schema-evolution behavior for churning dbt sources, and the integration contract/gotchas.
-
-See `memory-bank/` for comprehensive project documentation:
-- **projectbrief.md** - Core concepts and architecture
-- **systemPatterns.md** - Design patterns and data flows
-- **techContext.md** - Technical stack and constraints
-- **CLAUDE.md** - Development patterns and gotchas
+- **[`AGENTS.md`](AGENTS.md)** — the fast orientation for a coding agent: the mental model,
+  the two-file storage model, the full library + CLI surface, storage targets (local /
+  object-store / Databricks), and the flat skills in [`skills/`](skills/).
 
 ## Development
 
