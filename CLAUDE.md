@@ -1,21 +1,26 @@
 <!-- SPECKIT START -->
-Active feature: **002-fluxstate-temporal-viewer** ("Temporal Ghost" viewer + `flux` CLI pre-work).
+Active feature: **003-pluggable-storage-backends** (pluggable StorageBackend + tabular store + platform sidecars).
 
 For technologies, project structure, constraints, and design decisions, read the
 current plan and its Phase 0/1 artifacts:
-- Plan: `specs/002-fluxstate-temporal-viewer/plan.md`
-- Spec: `specs/002-fluxstate-temporal-viewer/spec.md`
-- Research: `specs/002-fluxstate-temporal-viewer/research.md`
-- Data model: `specs/002-fluxstate-temporal-viewer/data-model.md`
-- Contracts: `specs/002-fluxstate-temporal-viewer/contracts/` (cli.md, viewer-data.md, parity.schema.json)
-- Quickstart: `specs/002-fluxstate-temporal-viewer/quickstart.md`
+- Plan: `specs/003-pluggable-storage-backends/plan.md`
+- Spec: `specs/003-pluggable-storage-backends/spec.md`
+- Research: `specs/003-pluggable-storage-backends/research.md`
+- Data model: `specs/003-pluggable-storage-backends/data-model.md`
+- Contracts: `specs/003-pluggable-storage-backends/contracts/` (storage-backend.md, tables.md)
+- Quickstart: `specs/003-pluggable-storage-backends/quickstart.md`
 
-Builds on the SHIPPED change-log substrate (feature 001): `changelog.py` + `reconstruct.py` +
-`<name>.flux/` store. The viewer reproduces the LOCKED prototype in `docs/viewer/` and consumes the real
-store via DuckDB-WASM, reconstructing through a JS port of `reconstruct.py` kept honest by a Python-parity
-test. Pre-work: a `flux` CLI (stdlib argparse) + a seeded 1000×20 demo/stress fixture (Faker + numpy.random
-values, flux `capture()` for the passage of time). Stack: Python ≥3.10 (lib/CLI/fixture) + Svelte 5 + Vite +
-DuckDB-WASM (viewer); no heavy grid lib; Faker/numpy are demo/test-only. Keep it lightweight above all.
+Adds a pluggable **`StorageBackend`** seam so the change-log persists to ANY platform (Constitution
+Principle I / G8 — platform-agnostic; platform code only in `sidecars/` + optional extras, never core).
+New `storage/` package: `LocalFolderStore` (default, behaviour-identical to today), `ObjectStoreBackend`
+(fsspec `[remote]`), `TableBackend` (`flux_events` + optional `flux_mirror`; Parquet default, Delta/Iceberg
+opt-in `[table]`). First sidecar = Databricks (`[databricks]`, DeltaBackend). `changelog.py` refactors to
+talk to the protocol; `reconstruct.py` is UNCHANGED. Core stays Polars+PyArrow; heavy libs are opt-in
+extras. Invariants preserved: faithful-recorder, append-only/immutable/idempotent (`snapshot_id`), type
+fidelity (`dtype`), API back-compat, reconstruction parity across backends. Clarify decisions (2026-07-01):
+Parquet-default table format, opt-in on-demand+cadence `flux_mirror`, single-writer v1, URI-inference
+backend selection.
 
-Prior shipped feature: **001-changelog-first-pivot** — `specs/001-changelog-first-pivot/` (the data substrate).
+Prior shipped features: **001-changelog-first-pivot** (change-log substrate) + **002-fluxstate-temporal-viewer**
+(Temporal Ghost viewer + `flux` CLI). Keep it lightweight above all.
 <!-- SPECKIT END -->
