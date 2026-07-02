@@ -9,6 +9,15 @@ Source PRD: `prd/pluggable_storage_backends_2026-07-01.md`. Builds on shipped **
 substrate) and **002** (temporal viewer). Governed by the Constitution (`.specify/memory/constitution.md`),
 esp. **Principle I / G8 — Platform-Agnostic**.
 
+## Clarifications
+
+### Session 2026-07-01
+
+- Q: Off-platform, what format should the TableBackend use for `flux_events`? → A: **Plain partitioned Parquet dataset by default** (zero lock-in, no new dependency); **Delta (delta-rs) / Iceberg (pyiceberg)** available as **opt-in** formats.
+- Q: What is the default refresh policy for the optional `flux_mirror`? → A: **Opt-in (off by default)**; when enabled it supports **on-demand refresh (default)** AND an **optional cadence/staleness-threshold** mode; eager-every-capture is NOT the default.
+- Q: What concurrency writer model should v1 support? → A: **Single-writer per store** (documented); concurrent multi-writer append with locking is a fast-follow.
+- Q: How is a backend selected (public API surface)? → A: **URI/scheme inference** (local path → folder; `s3://`·`abfss://`·`gs://` → object-store) **plus an explicit `store=`/`backend=` override** for table/sidecar targets; existing local-path calls are unchanged.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Existing local stores keep working, storage is now swappable (Priority: P1)
@@ -153,10 +162,13 @@ each backend; all backends produce identical as-of / timeline / row-state / mirr
 - **FR-003**: An **object-store backend** MUST persist a store to remote object storage (S3 / ADLS / GCS /
   UC Volume) with capture and reconstruction identical to local, committing metadata **atomically**.
 - **FR-004**: A **table backend** MUST store the change-log as a first-class **`flux_events`** table
-  (narrow, append-only) and MUST NOT rewrite existing rows/files on capture.
+  (narrow, append-only) and MUST NOT rewrite existing rows/files on capture. Off-platform (no managed
+  lakehouse), the table backend MUST **default to a plain partitioned Parquet dataset** (no new
+  dependency); **Delta (delta-rs) and Iceberg (pyiceberg)** MUST be available as **opt-in** table formats.
 - **FR-005**: The table backend MUST support an **optional materialized `flux_mirror`** table (the
-  reconstructed current or as-of state) with a configurable refresh policy; `flux_mirror` MUST be
-  derivable purely from `flux_events`.
+  reconstructed current or as-of state), which MUST be **opt-in (off by default)**. When enabled, it MUST
+  support **on-demand refresh (the default)** and an **optional cadence/staleness-threshold refresh mode**;
+  `flux_mirror` MUST be derivable purely from `flux_events`, which remains the source of truth.
 - **FR-006**: Store metadata (schema union, key column, and — where needed — the valid-event catalog) MUST
   be persisted per backend (e.g., table properties or a companion), replacing `manifest.json` where a real
   table renders it redundant.
@@ -173,7 +185,10 @@ each backend; all backends produce identical as-of / timeline / row-state / mirr
 - **FR-011**: Reconstruction (as-of / timeline / row-state / mirror) MUST return **identical results across
   all backends**, enforced by a reconstruction-parity test (Constitution G6/parity).
 - **FR-012**: Existing public API signatures MUST be **preserved**; backend selection MUST be **additive**
-  and MUST default to the local-folder backend.
+  and MUST default to the local-folder backend. Backend selection MUST work by **store-location URI/scheme
+  inference** (a local path → folder backend; `s3://` / `abfss://` / `gs://` → object-store backend) with
+  an **explicit `store=`/`backend=` override** for table and platform-sidecar targets; existing local-path
+  calls MUST continue to work unchanged.
 - **FR-013**: Every backend's capture MUST be **atomic**: a partial/interrupted write MUST NOT corrupt the
   store or become visible before commit.
 - **FR-014**: **Faithful-recorder** semantics MUST be preserved — no semantic-equality normalization is
@@ -217,14 +232,17 @@ each backend; all backends produce identical as-of / timeline / row-state / mirr
 
 ## Assumptions
 
-- **Off-platform table format default**: where no platform provides a managed table, the table backend
-  defaults to a **plain partitioned Parquet dataset** (zero lock-in, aligns with G1/G2); Delta/Iceberg are
-  used where a platform offers them or a user opts in. (PRD open question Q4 — informed default; revisit in
-  `/speckit-clarify`.)
-- **`flux_mirror` refresh default**: materialization is **opt-in** and refreshes **on demand** by default
-  (not on every capture), to bound cost; eager per-capture refresh is a configurable option. (PRD Q2.)
-- **Concurrency**: v1 assumes a **single writer per store**; concurrent multi-writer append with locking is
-  fast-follow, not in scope. (PRD Q3.)
+- **Off-platform table format** (DECIDED, Session 2026-07-01): the table backend **defaults to a plain
+  partitioned Parquet dataset** (zero lock-in, no new dependency, aligns G1/G2); **Delta (delta-rs) and
+  Iceberg (pyiceberg)** are **opt-in** formats used where a platform offers them or a user selects them.
+- **`flux_mirror` refresh** (DECIDED): materialization is **opt-in (off by default)**; when enabled it
+  supports **on-demand refresh (default)** plus an **optional cadence/staleness-threshold** mode
+  (eager-every-capture is not the default). `flux_events` is always the source of truth.
+- **Concurrency** (DECIDED): v1 assumes a **single writer per store** (documented); concurrent
+  multi-writer append with locking is fast-follow, not in scope.
+- **Backend selection** (DECIDED): chosen by **store-location URI/scheme inference** (local path → folder;
+  `s3://`/`abfss://`/`gs://` → object-store) with an **explicit `store=`/`backend=` override** for
+  table/sidecar targets; existing local-path calls are unchanged (back-compat G3).
 - **Databricks is the first sidecar**; Snowflake / PostgreSQL / Supabase / LakeBase / generic-Lakehouse
   sidecars are fast-follow over the identical interface and are **out of scope** for this feature.
 - Builds on the **shipped 001 change-log substrate** and **002 viewer parity discipline**; the

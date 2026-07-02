@@ -31,9 +31,9 @@
 
 ## Notes
 
-- 3 open design questions (off-platform table format, `flux_mirror` refresh policy, concurrency model)
-  were resolved with **informed defaults documented in Assumptions** rather than blocking
-  [NEEDS CLARIFICATION] markers — revisit in `/speckit-clarify` if the defaults need to change.
+- 4 open design questions (off-platform table format, `flux_mirror` refresh policy, concurrency model,
+  backend-selection API) were **resolved via `/speckit-clarify` (Session 2026-07-01)** and recorded in the
+  spec's `## Clarifications` section + propagated into FR-004 / FR-005 / FR-012 / Assumptions.
 - "Delta / Parquet / object-store / Databricks" appear as **named targets in scenarios/edge cases**
   (unavoidable — the feature IS about storage targets), not as prescribed core implementation; the core
   requirements stay platform-agnostic per Constitution G8.
