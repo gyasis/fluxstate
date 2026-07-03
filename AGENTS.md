@@ -75,24 +75,33 @@ flux gen-fixture <store.flux> [--rows N --cols N --steps N --seed 42 --violation
 flux serve   <store.flux> [--port 5173] [--no-open]                  # launch the Temporal Viewer
 ```
 
-## Storage targets (local today; object-store / Databricks patterns)
+## Storage backends (feature 003 — pluggable, platform-agnostic)
 
-The library **writes to a local filesystem** today (`store_path` is a local `Path`). A
-remote/S3/warehouse-stage **Storage Adapter is a documented fast-follow, not built yet**
-(spec `001-changelog-first-pivot` §Store location). To use the store in **Databricks** now — and
-it's a *better* fit than the old JSON-in-cell table, since the store is plain Parquet + append-only:
+Persistence goes through a pluggable `StorageBackend` seam (Constitution G8). The core stays
+Polars + PyArrow; each backend beyond local is an **opt-in extra**. Select by `store_path` URI
+(inference) or pass an explicit backend via `store=`:
 
-1. **UC Volume / object store + glob-read:** land the `.flux/` folder in a Volume/object store,
-   query `read_files('…/events/*.parquet')` (or an external table), reconstruct as-of in Spark SQL
-   (the algorithm above) or run DuckDB over the Parquet.
-2. **Sink events into a Delta table (append-only):** the events are an append-only EAV log — a
-   natural Delta MERGE/APPEND target; the current mirror is then a view/materialized table over it.
-3. **Materialize the mirror:** `flux view` / `save_mirror_table()` → write the result to a Delta
-   table if you want the old one-wide-table shape, while keeping the lean delta log as history.
+| Backend (`from storage import …`) | Persists as | Target | Extra |
+|---|---|---|---|
+| `LocalFolderStore` (default) | `manifest.json` + `events/*.parquet` | local disk | — (core) |
+| `ObjectStoreBackend` | same layout, atomic single-object meta PUT | `s3://` `abfss://` `gs://` UC Volume `memory://` | `[remote]` (fsspec) |
+| `TableBackend` | **`flux_events`** table (+ optional **`flux_mirror`**) | Parquet dataset (default) · Delta/Iceberg (opt-in) | `[table]` for Delta/Iceberg |
+| `DeltaBackend` (`from sidecars.databricks import DeltaBackend`) | Delta `flux_events` (+ `flux_mirror`) | Databricks | `[databricks]` |
 
-Bridge to get files there now: write locally then upload the immutable `events/*.parquet`
-(copy-new-files-only), or point `store_path` at a mounted Volume/DBFS path. **No Delta/Iceberg
-dependency required** — a deliberate lightweight choice.
+```python
+from fluxstate import FluxState
+from storage import TableBackend
+FluxState(df, key_column="id", store_path="patients.flux").update_mirror_table()        # local (default)
+FluxState(df, key_column="id", store_path="s3://bucket/patients.flux").update_mirror_table()  # object store
+FluxState(df, key_column="id", store=TableBackend(events="warehouse/flux_events",
+          mirror="warehouse/flux_mirror")).update_mirror_table()                        # tabular
+```
+
+Any platform integration is an optional **sidecar** (Databricks is the first — `docs/DATABRICKS.md`);
+Snowflake / Postgres / Supabase / LakeBase / Lakehouse follow the same interface. **Reconstruction is
+byte-identical across all backends** (a parity test is the merge gate). The store stays plain
+Parquet — glob-readable by DuckDB / Polars / Spark with no FluxState code; `flux_events` can be a
+first-class table you query directly, and `flux_mirror` is the optional wide "current state" view.
 
 ## Gotchas
 

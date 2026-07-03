@@ -93,6 +93,7 @@ copy of the world each time.
 - ✅ **Time-travel reconstruction** with **type fidelity** — values restored to their original dtypes (not string-cast)
 - ✅ **Delete + resurrection continuity** — one continuous timeline per `entity_id`
 - ✅ **Glob-readable store** — plain Parquet; queryable by DuckDB / Polars with no FluxState code (no Delta/Iceberg)
+- ✅ **Pluggable storage backends** — local folder (default), object store (`s3`/`abfss`/`gcs`/UC Volume, `[remote]`), or a first-class **table** (`flux_events` + optional `flux_mirror`, `[table]`); platform sidecars (Databricks first). Core stays Polars+PyArrow; reconstruction is byte-identical across backends. See [`AGENTS.md`](AGENTS.md) + [`docs/DATABRICKS.md`](docs/DATABRICKS.md)
 - ✅ **Wide-table safe** — row-hash-prefiltered keyed diff stays O(changed rows)
 - ✅ **Multi-format output** — Polars / Arrow (zero-copy) / Parquet / CSV
 - ✅ **Lightweight** — Polars + PyArrow only; no heavy runtime dependency

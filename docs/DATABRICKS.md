@@ -3,12 +3,17 @@
 Track a Databricks **view/table's** cell-level deltas over time — daily, on a schedule, **staying
 entirely on Databricks** — and store the change-log in a **tabular** format.
 
-> **Status (read first).** The **`fluxstate[databricks]` sidecar** (a `DeltaBackend` that writes a
-> Delta `flux_events` table + optional `flux_mirror`) is **PLANNED** — see the PRD
-> [`prd/pluggable_storage_backends_2026-07-01.md`](../prd/pluggable_storage_backends_2026-07-01.md)
-> (Constitution Principle I: platform integrations are sidecars, never core). **What works TODAY** is
-> **Pattern A** below: run the FluxState *library* inside a scheduled Job, capture on POSIX local disk,
-> and sync the `.flux/` store to a Unity Catalog Volume. This doc documents both — clearly labeled.
+> **Status (read first).** The **`fluxstate[databricks]` sidecar** — `DeltaBackend`
+> (`sidecars/databricks/__init__.py`) writing a Delta `flux_events` table + optional `flux_mirror`,
+> plus a scheduled-Job capture template (`sidecars/databricks/job_template.py`) — is **SHIPPED**
+> (Constitution Principle I: platform integrations are sidecars, never core; see the PRD
+> [`prd/pluggable_storage_backends_2026-07-01.md`](../prd/pluggable_storage_backends_2026-07-01.md)).
+> It requires `pip install "fluxstate[databricks]"` (`deltalake` + `databricks-sdk`) and a real
+> Spark/Databricks runtime to exercise end-to-end — it is validated in this repo only
+> *structurally* (unit tests over a local Delta table + an import-graph proof that the core pulls
+> in zero platform deps; `deltalake`/`pyspark` are not installed in this dev environment). Pattern A
+> below (library on a scheduled Job + Volume sync) still works today and needs no extra at all — pick
+> it if you'd rather stay on plain Parquet/Volumes.
 
 ---
 
@@ -31,7 +36,7 @@ log replaces the manifest entirely).
   ```
 - A source **view/table with a stable key column** (the `entity_id` — must match rows across days).
 - A durable location: a **UC Volume** (`/Volumes/<cat>/<sch>/<vol>/`) for Pattern A, and/or Delta
-  tables for the planned sidecar.
+  tables (Unity Catalog names, e.g. `catalog.schema.flux_events`) for the `[databricks]` sidecar.
 
 ---
 
@@ -86,30 +91,56 @@ file-arrival trigger is also available if you later want change-driven capture.)
 
 ---
 
-## Pattern B/C — the `[databricks]` sidecar: Delta `flux_events` (+ `flux_mirror`) — PLANNED
+## Pattern B/C — the `[databricks]` sidecar: Delta `flux_events` (+ `flux_mirror`) — SHIPPED
 
-The target the PRD specs. The sidecar wires FluxState's storage interface to **Delta tables** — no
-Volume/FUSE dance, no manifest (Delta's transaction log tracks files), and the change-log is a
-**first-class table**:
+The sidecar wires FluxState's storage interface to **Delta tables** — no Volume/FUSE dance, no
+`manifest.json` (a small `_flux_meta.json` companion still carries the schema union + key column,
+same shape as the Parquet `TableBackend`; Delta's transaction log tracks the data files), and the
+change-log is a **first-class table**. `DeltaBackend` is a `TableBackend` subclass, so it's a genuine
+drop-in for `FluxState(store=...)` — capture, `.travel()`, `.get_timeline()`, everything:
 
 ```python
-# PLANNED — fluxstate[databricks]
+# fluxstate[databricks]
 from fluxstate import FluxState
-from fluxstate.databricks import DeltaBackend
+from sidecars.databricks import DeltaBackend
 
 fs = FluxState(
     snapshot, key_column="id",
     store=DeltaBackend(
         events="catalog.schema.flux_events",          # narrow EAV change-log (source of truth)
         mirror="catalog.schema.flux_mirror",          # optional: materialized wide current state
-        mirror_refresh="each_capture",                # each_capture | on_demand | off
+        mirror_refresh="on_demand",                   # on_demand (default) | cadence:N
     ),
 )
-fs.update_mirror_table()     # appends to flux_events (idempotent) + refreshes flux_mirror
+fs.update_mirror_table()     # appends to flux_events (idempotent) + auto-refreshes on cadence
+fs.refresh_mirror()          # materialize/refresh flux_mirror on demand
 ```
 
-Distributed capture for very large views will be optional (`applyInPandas`); the default is a
-driver-side capture (the diff is a **table-level join**, not a per-row UDF).
+Or drive it via the ready-made scheduled-Job template (`sidecars/databricks/job_template.py`),
+which wraps exactly this pattern as a single `capture_view(...)` call — see below.
+
+### The scheduled-Job template
+
+```python
+# Databricks notebook task (daily Job trigger) — sidecars/databricks/job_template.py
+from sidecars.databricks.job_template import capture_view
+
+capture_view(
+    spark,                                        # the notebook's live SparkSession
+    view="catalog.schema.my_view",
+    key_column="id",
+    events_table="catalog.schema.flux_events",
+    mirror_table="catalog.schema.flux_mirror",     # optional
+    mirror_refresh="on_demand",
+)
+```
+
+`capture_view` reads the view driver-side (`spark.table(view).toArrow()` → Polars, falling back to
+`toPandas()`), captures via `DeltaBackend`, then refreshes the mirror when configured. For a view too
+large to collect driver-side, pass `distributed=True` — this repartitions the view and pulls each
+partition's Arrow batch via `mapInArrow` (a thin cousin of `applyInPandas`) before concatenating; the
+diff/capture step itself always stays **driver-side** (it's a table-level keyed join, not a per-row
+UDF — see Gotchas below).
 
 ---
 
@@ -119,7 +150,7 @@ driver-side capture (the diff is a **table-level join**, not a per-row UDF).
 |---|---|---|---|
 | **`flux_events`** | narrow EAV table `(entity_id, timestamp, field, value, dtype, snapshot_id)` | lean, append-only **source of truth** (history) | **always** |
 | **`flux_mirror`** | wide reconstructed **current/as-of** state | the query-friendly "mirror table" shape | **optional** — materialize on a cadence |
-| meta | Delta table properties (or a tiny `flux_meta`) | schema union + `key_column` | replaces `manifest.json` in table mode |
+| meta | a small `_flux_meta.json` companion (JSON sidecar, not Delta table properties) | schema union + `key_column` + committed-file catalog | replaces `manifest.json` in table mode |
 
 Trade-off: `flux_mirror` is a full-table-size duplicate refreshed each run; `flux_events` stays
 compact. Keep both for query convenience; keep only `flux_events` + reconstruct-on-read to minimize

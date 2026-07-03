@@ -19,13 +19,14 @@ Reads/reconstruction live in ``reconstruct.py``. See
 from __future__ import annotations
 
 import hashlib
-import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TYPE_CHECKING
 
 import polars as pl
+
+if TYPE_CHECKING:  # pragma: no cover - type-checking only, no runtime import
+    from storage.base import StorageBackend
 
 SCHEMA_VERSION = 1
 
@@ -224,60 +225,40 @@ class ChangeLogStore:
     ``manifest.json`` is the authoritative commit point. See the store contract.
     """
 
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, *, backend: Optional["StorageBackend"] = None):
         self.path = Path(path)
         self.events_dir = self.path / EVENTS_DIR
         self.manifest_path = self.path / MANIFEST_NAME
 
-    # --- manifest I/O (T007) ------------------------------------------------ #
-    def _fresh_manifest(self) -> dict:
-        """A manifest for a store with no commits yet."""
-        return {
-            "schema_version": SCHEMA_VERSION,
-            "store_name": self.path.stem,
-            "key_column": "",
-            "schema": {},
-            "events": [],
-            "checkpoints": [],
-        }
+        # Storage-backend seam (feature 003, T007/T008). Additive keyword:
+        # existing `ChangeLogStore(path)` calls are unaffected (G3) and now
+        # default to `LocalFolderStore(path)` — behavior-identical to the old
+        # inline local-filesystem I/O, just moved behind the seam. Imported
+        # lazily to avoid a module-load-time cycle (`storage.local_folder`
+        # imports helpers from this module).
+        if backend is None:
+            from storage.local_folder import LocalFolderStore
 
+            backend = LocalFolderStore(self.path)
+        self.backend = backend
+
+    # --- manifest I/O (T007) — delegates to the storage backend ------------- #
     def read_manifest(self) -> dict:
         """Return the manifest dict (FR-014 / STORE-4).
 
-        Only files listed under ``events`` are valid history; an orphan parquet
-        on disk but absent here is ignored. Returns a fresh empty manifest when
+        Delegates to the storage backend (default ``LocalFolderStore``, which
+        returns the exact same on-disk shape this method always has): only
+        files listed under ``events`` are valid history; an orphan parquet on
+        disk but absent here is ignored. Returns a fresh empty manifest when
         the store does not exist yet.
         """
-        if not self.manifest_path.exists():
-            return self._fresh_manifest()
-        with open(self.manifest_path, "rb") as fh:
-            manifest = json.loads(fh.read())
-        manifest.setdefault("checkpoints", [])
-        return manifest
+        return self.backend.read_manifest()
 
     def write_manifest(self, manifest: dict) -> None:
-        """Atomically write the manifest (temp → fsync → rename) — the commit point."""
-        self.path.mkdir(parents=True, exist_ok=True)
-        tmp = self.manifest_path.with_suffix(".json.tmp")
-        data = json.dumps(manifest, indent=2, sort_keys=False).encode("utf-8")
-        with open(tmp, "wb") as fh:
-            fh.write(data)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.replace(tmp, self.manifest_path)
+        """Atomically write the manifest — the commit point (delegates to the backend)."""
+        self.backend.write_manifest(manifest)
 
-    # --- atomic events writer (T008) --------------------------------------- #
-    def _events_filename(self, stamp: datetime) -> str:
-        """A UTC, lexically-sortable events filename (so a plain glob sorts by time)."""
-        base = to_utc(stamp).strftime("%Y%m%dT%H%M%S%fZ")
-        name = f"{base}.parquet"
-        # Guarantee uniqueness if two captures land in the same microsecond.
-        n = 1
-        while (self.events_dir / name).exists():
-            name = f"{base}_{n}.parquet"
-            n += 1
-        return name
-
+    # --- atomic events writer (T008) — delegates to the storage backend ---- #
     def _append_events(
         self,
         events: pl.DataFrame,
@@ -288,85 +269,28 @@ class ChangeLogStore:
     ) -> dict:
         """Atomically append one immutable events file and commit the manifest (FR-013).
 
-        Protocol (crash-safe): write ``events/.<ts>.parquet.tmp`` → fsync → atomic
-        rename to ``events/<ts>.parquet`` → recompute manifest in memory → atomic
-        manifest rewrite. A crash before the manifest rewrite leaves an orphan
-        parquet that readers ignore (STORE-4). Row-group ``min/max(timestamp)``
-        stats are written (STORE-5) and the per-file ts range is stamped into the
-        manifest entry (R5 file-skip).
+        Delegates to the storage backend, which performs the exact same
+        crash-safe protocol this method always has: write
+        ``events/.<ts>.parquet.tmp`` → fsync → atomic rename to
+        ``events/<ts>.parquet`` → recompute manifest in memory → atomic
+        manifest rewrite (STORE-4/STORE-5, R5 file-skip).
         """
-        if events.is_empty():
-            raise ValueError("_append_events called with no events")
-        self.events_dir.mkdir(parents=True, exist_ok=True)
+        return self.backend._append_events(events, snapshot_id, key_column, schema, stamp=stamp)
 
-        stamp = stamp or datetime.now(timezone.utc)
-        fname = self._events_filename(stamp)
-        final = self.events_dir / fname
-        tmp = self.events_dir / f".{fname}.tmp"
-
-        # Write parquet with statistics (row-group min/max for the timestamp column).
-        events.write_parquet(tmp, statistics=True)
-        with open(tmp, "rb") as fh:
-            os.fsync(fh.fileno())
-        os.replace(tmp, final)
-
-        ts_min = events["timestamp"].min()
-        ts_max = events["timestamp"].max()
-        entry = {
-            "file": f"{EVENTS_DIR}/{fname}",
-            "snapshot_id": snapshot_id,
-            "ts_min": to_utc(ts_min).isoformat(),
-            "ts_max": to_utc(ts_max).isoformat(),
-            "row_count": events.height,
-        }
-
-        manifest = self.read_manifest()
-        manifest["key_column"] = key_column
-        # Append-only schema UNION (not overwrite): a column dropped from a later
-        # snapshot must still resolve in historical as-of views, since its events
-        # remain in history. Latest dtype tag wins if a column is re-seen; the
-        # first-seen column order is preserved. (Overwriting here erased dropped
-        # columns from every past view — silent time-travel corruption.)
-        merged_schema = dict(manifest.get("schema") or {})
-        merged_schema.update(schema)
-        manifest["schema"] = merged_schema
-        manifest["events"].append(entry)
-        self.write_manifest(manifest)
-        return entry
-
-    # --- file listing / pruning (T009) ------------------------------------- #
+    # --- file listing / pruning (T009) — delegates to the storage backend -- #
     def list_events(self, as_of: Optional[datetime] = None, window=None) -> list[Path]:
         """Return manifest-valid event files (chronological), with file-skip pruning (R5).
 
-        Only files listed in the manifest are considered (orphan parquet ignored,
-        STORE-4). A file is pruned when its ``[ts_min, ts_max]`` range cannot
-        contain any event in scope:
+        Delegates to the storage backend. Only files listed in the manifest
+        are considered (orphan parquet ignored, STORE-4). A file is pruned
+        when its ``[ts_min, ts_max]`` range cannot contain any event in scope:
 
         - ``as_of`` (a UTC datetime): drop files whose ``ts_min`` is strictly after
           ``as_of`` (they lie entirely in the future relative to the query).
         - ``window`` (``(lo, hi)``, either bound optional): drop files whose range
           lies entirely outside ``[lo, hi]``.
         """
-        manifest = self.read_manifest()
-        as_of = to_utc(as_of) if as_of is not None else None
-        lo = hi = None
-        if window is not None:
-            lo, hi = window
-            lo = to_utc(lo) if lo is not None else None
-            hi = to_utc(hi) if hi is not None else None
-
-        kept: list[Path] = []
-        for entry in manifest.get("events", []):
-            ts_min = to_utc(datetime.fromisoformat(entry["ts_min"]))
-            ts_max = to_utc(datetime.fromisoformat(entry["ts_max"]))
-            if as_of is not None and ts_min > as_of:
-                continue  # file entirely after the as-of point
-            if lo is not None and ts_max < lo:
-                continue  # file entirely before the window
-            if hi is not None and ts_min > hi:
-                continue  # file entirely after the window
-            kept.append(self.path / entry["file"])
-        return kept
+        return self.backend.list_events(as_of=as_of, window=window)
 
     # --- store read-back: current state (generalized by reconstruct T020) -- #
     def _read_all_events(self, as_of: Optional[datetime] = None) -> pl.DataFrame:
