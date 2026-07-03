@@ -2,6 +2,13 @@
 
 **Feature**: `001-changelog-first-pivot` · **Version**: 2026-06-05
 
+> **Storage backends (feature 003):** this reference describes the change-log model + the default
+> local-folder store. Since 003, persistence is **pluggable** — the same API also writes to an object
+> store, a first-class table (`flux_events` + optional `flux_mirror`; Parquet/Delta/Iceberg), or a
+> Databricks Delta table — selected via `store_path` URI or `store=<backend>`, all reconstructing
+> byte-identically. See the **`fluxstate-storage`** skill, `AGENTS.md` → Storage backends, and
+> `specs/003-pluggable-storage-backends/contracts/`.
+
 ---
 
 ## 1. Overview

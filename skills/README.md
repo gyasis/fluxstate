@@ -9,6 +9,7 @@ YAML frontmatter (`name` + `description`); the `description` is the trigger the 
 | [`fluxstate-capture.md`](fluxstate-capture.md) | **Write** — capture/append snapshots into a store (idempotent; deletes) |
 | [`fluxstate-timetravel.md`](fluxstate-timetravel.md) | **Read** — as-of reconstruction, per-cell timeline, row lifecycle, `info`, DuckDB glob |
 | [`fluxstate-compare.md`](fluxstate-compare.md) | **Compare** — A/B & change-over-time diff + launch the Temporal Viewer |
+| [`fluxstate-storage.md`](fluxstate-storage.md) | **Storage** — pick/use a backend (local · object-store `[remote]` · table `[table]` · Databricks `[databricks]`); the `flux_events`/`flux_mirror` contract |
 
 ## Install (copy into your skills dir)
 
