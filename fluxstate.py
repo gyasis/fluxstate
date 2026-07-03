@@ -55,7 +55,7 @@ def convert_to_string(value):
 
 class FluxState:
     def __init__(self, table, key_column=None, mode="init", expect_serialized=False,
-                 store_path=None):
+                 store_path=None, backend=None):
         self.table = table
         self.key_column = key_column or self.table.columns[0]
         self.validator = MirrorTableValidator()
@@ -68,7 +68,11 @@ class FluxState:
         # Bind the append-only change-log store. `store_path` is an additive keyword
         # (back-compat: existing positional/keyword calls are unaffected). Defaults to
         # `fluxstate.flux/` in the cwd so the pathless quickstart usage works.
-        self.store = ChangeLogStore(store_path or "fluxstate.flux")
+        # `backend` is an additive optional keyword (feature 003, T007) that forwards
+        # a `StorageBackend` implementation through to `ChangeLogStore`; it has no
+        # effect yet (no backend implementation exists in this wave) and defaults to
+        # local-filesystem behavior identical to today (G3).
+        self.store = ChangeLogStore(store_path or "fluxstate.flux", backend=backend)
 
         # Cast all columns except the key column to string
         self.table = self.table.with_columns([

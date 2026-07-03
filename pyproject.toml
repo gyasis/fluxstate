@@ -18,6 +18,17 @@ dependencies = [
     "pydantic>=2.0",
 ]
 
+# Optional, opt-in extras — the CORE stays Polars + PyArrow only (Constitution G1/G8,
+# spec SC-004). Platform SDKs / heavy table formats live here, never in `dependencies`.
+[project.optional-dependencies]
+# Object-store backend (s3 / abfss / gcs / UC Volume) via fsspec.
+remote = ["fsspec>=2024.6.0", "s3fs>=2024.6.0", "adlfs>=2024.4.0", "gcsfs>=2024.6.0"]
+# First-class table backend. The default Parquet-dataset path needs NEITHER of these;
+# they are only pulled when a user selects the Delta/Iceberg format (clarify Q1).
+table = ["deltalake>=0.18", "pyiceberg>=0.7"]
+# Databricks sidecar (first platform sidecar).
+databricks = ["deltalake>=0.18", "databricks-sdk>=0.30"]
+
 [project.scripts]
 flux = "flux_cli:main"
 
@@ -49,5 +60,7 @@ include = [
     "mirror_validator.py",
     "example.py",
     "scripts/",
+    "storage/",     # feature 003 — pluggable storage backends (core)
+    "sidecars/",    # feature 003 — optional platform sidecars (extras)
 ]
 dev-mode-dirs = ["."]

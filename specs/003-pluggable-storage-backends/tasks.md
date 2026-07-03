@@ -21,9 +21,9 @@ parity tests.
 
 ## Phase 1: Setup (Shared Infrastructure)
 
-- [ ] T001 Create the `storage/` package skeleton (`storage/__init__.py`, `storage/base.py`) per plan.md structure
-- [ ] T002 Create the `sidecars/databricks/` package skeleton (`sidecars/databricks/__init__.py`) — MUST never be imported by core (G8)
-- [ ] T003 [P] Add `[project.optional-dependencies]` to `pyproject.toml`: `remote` (fsspec, s3fs, adlfs, gcsfs), `table` (deltalake, pyiceberg), `databricks` (deltalake, databricks-sdk) — core deps (Polars, PyArrow) UNCHANGED (G1/SC-004)
+- [x] T001 Create the `storage/` package skeleton (`storage/__init__.py`, `storage/base.py`) per plan.md structure
+- [x] T002 Create the `sidecars/databricks/` package skeleton (`sidecars/databricks/__init__.py`) — MUST never be imported by core (G8)
+- [x] T003 [P] Add `[project.optional-dependencies]` to `pyproject.toml`: `remote` (fsspec, s3fs, adlfs, gcsfs), `table` (deltalake, pyiceberg), `databricks` (deltalake, databricks-sdk) — core deps (Polars, PyArrow) UNCHANGED (G1/SC-004)
 
 ---
 
@@ -31,10 +31,10 @@ parity tests.
 
 **⚠️ CRITICAL**: No user story can begin until Phase 2 is complete — this is the storage seam everything uses.
 
-- [ ] T004 Define the `StorageBackend` Protocol + `Capabilities` flags (`is_table`, `supports_atomic_meta`, `supports_time_pushdown`, `supports_mirror`) in `storage/base.py` per `contracts/storage-backend.md`
-- [ ] T005 [P] Define `Meta` (store descriptor — schema union + `key_column` + mirror policy; FR-006), `EventRef`, and the invariant Change-Event schema constants in `storage/base.py` per `data-model.md`
-- [ ] T006 Implement `select_backend(location, *, store=None, backend=None)` URI-scheme inference in `storage/__init__.py` per contract §Selection; missing-extra → actionable error naming the extra
-- [ ] T007 Refactor `changelog.ChangeLogStore` to persist/read exclusively via the `StorageBackend` protocol (no behavior change yet), and wire the additive `store=`/`backend=` parameter through `fluxstate.FluxState` (default = local; G3)
+- [x] T004 Define the `StorageBackend` Protocol + `Capabilities` flags (`is_table`, `supports_atomic_meta`, `supports_time_pushdown`, `supports_mirror`) in `storage/base.py` per `contracts/storage-backend.md`
+- [x] T005 [P] Define `Meta` (store descriptor — schema union + `key_column` + mirror policy; FR-006), `EventRef`, and the invariant Change-Event schema constants in `storage/base.py` per `data-model.md`
+- [x] T006 Implement `select_backend(location, *, store=None, backend=None)` URI-scheme inference in `storage/__init__.py` per contract §Selection; missing-extra → actionable error naming the extra
+- [x] T007 Refactor `changelog.ChangeLogStore` to persist/read exclusively via the `StorageBackend` protocol (no behavior change yet), and wire the additive `store=`/`backend=` parameter through `fluxstate.FluxState` (default = local; G3)
 
 ---
 
@@ -43,10 +43,10 @@ parity tests.
 **Goal**: Existing `.flux/` stores behave identically, now through the pluggable seam (the default backend).
 **Independent test**: Run capture → reconstruct → timeline → row-state on a pre-existing `.flux/` folder; results identical to pre-feature and the full existing suite is green.
 
-- [ ] T008 [US1] Extract today's writer/reader into `storage/local_folder.py:LocalFolderStore` implementing `StorageBackend` (manifest.json + immutable events/*.parquet; temp→fsync→atomic rename) — behavior-identical (SB-1..SB-5)
-- [ ] T009 [US1] Make `LocalFolderStore` the backend `select_backend` resolves for local paths / `file://` (default; G3, FR-002)
-- [ ] T010 [P] [US1] Regression test `TESTS/test_local_folder.py`: capture / reconstruct / delete-resurrect / idempotency / type-fidelity preserved on a `.flux/` folder; **faithful-recorder (FR-014)** — assert a format / precision / timezone change (e.g. `82.00`→`82`, `MARGARET`→`Margaret`) is recorded AS a change (no semantic-equality normalization at capture)
-- [ ] T011 [US1] Run the full existing `TESTS/` suite green against the refactor — zero regressions (SC-002)
+- [x] T008 [US1] Extract today's writer/reader into `storage/local_folder.py:LocalFolderStore` implementing `StorageBackend` (manifest.json + immutable events/*.parquet; temp→fsync→atomic rename) — behavior-identical (SB-1..SB-5)
+- [x] T009 [US1] Make `LocalFolderStore` the backend `select_backend` resolves for local paths / `file://` (default; G3, FR-002)
+- [x] T010 [P] [US1] Regression test `TESTS/test_local_folder.py`: capture / reconstruct / delete-resurrect / idempotency / type-fidelity preserved on a `.flux/` folder; **faithful-recorder (FR-014)** — assert a format / precision / timezone change (e.g. `82.00`→`82`, `MARGARET`→`Margaret`) is recorded AS a change (no semantic-equality normalization at capture)
+- [x] T011 [US1] Run the full existing `TESTS/` suite green against the refactor — zero regressions (SC-002)
 
 **Checkpoint**: MVP — FluxState works exactly as before, on a swappable backend.
 
