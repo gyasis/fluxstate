@@ -30,7 +30,7 @@ FluxState(df, key_column="id", store_path="s3://bucket/patients.flux").update_mi
 
 ```python
 from fluxstate import FluxState
-from fluxstate.storage import TableBackend
+from storage import TableBackend
 
 fs = FluxState(df, key_column="id", store=TableBackend(
     events="warehouse/patients/flux_events",   # Parquet dataset by default (zero new dep)
@@ -48,7 +48,7 @@ fs.refresh_mirror()               # materialize/refresh flux_mirror on demand
 ```python
 # in a scheduled Databricks Job (fluxstate[databricks]); see docs/DATABRICKS.md
 from fluxstate import FluxState
-from fluxstate.sidecars.databricks import DeltaBackend
+from sidecars.databricks import DeltaBackend
 
 snapshot = pl.from_arrow(spark.table("cat.sch.my_view").toArrow())
 FluxState(snapshot, key_column="id", store=DeltaBackend(

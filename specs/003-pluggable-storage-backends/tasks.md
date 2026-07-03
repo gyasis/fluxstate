@@ -110,11 +110,11 @@ parity tests.
 
 ## Phase 8: Polish & Cross-Cutting
 
-- [ ] T028 [P] Update `README.md` + `AGENTS.md` storage sections: backends, extras, URI selection (docs ship with the feature)
-- [ ] T029 [P] Validate `specs/003-pluggable-storage-backends/quickstart.md` end-to-end (each backend snippet runs)
-- [ ] T030 [P] Finalize `pyproject.toml` extras + a `pip install "fluxstate[...]"` smoke check; confirm base footprint unchanged (SC-004)
-- [ ] T031 Verify the `flux` CLI still works unchanged against a local store (no CLI change required)
-- [ ] T032 Final gate: full `TESTS/` suite + parity green; Constitution re-check G1–G8 (G8 first)
+- [x] T028 [P] Update `README.md` + `AGENTS.md` storage sections: backends, extras, URI selection (docs ship with the feature)
+- [x] T029 [P] Validate `specs/003-pluggable-storage-backends/quickstart.md` end-to-end (each backend snippet runs)
+- [x] T030 [P] Finalize `pyproject.toml` extras + a `pip install "fluxstate[...]"` smoke check; confirm base footprint unchanged (SC-004)
+- [x] T031 Verify the `flux` CLI still works unchanged against a local store (no CLI change required)
+- [x] T032 Final gate: full `TESTS/` suite + parity green; Constitution re-check G1–G8 (G8 first)
 
 ---
 
