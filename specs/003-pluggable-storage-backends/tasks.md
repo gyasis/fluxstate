@@ -57,12 +57,12 @@ parity tests.
 **Goal**: Store history as a table: `flux_events` (always) + optional materialized `flux_mirror`.
 **Independent test**: Capture two snapshots via TableBackend; query `flux_events` as a table; enable `flux_mirror` and confirm it equals the reconstructed current state; reconstruction matches the local backend.
 
-- [ ] T012 [US2] Implement `storage/table.py:TableBackend` — `flux_events` as a partitioned Parquet dataset (append = new part; `_flux_meta.json` companion via atomic PUT persisting the store descriptor; no rewrite) (FR-004, FR-006, R4, FE-1..4, M-1..3)
-- [ ] T013 [US2] Implement optional `flux_mirror` in `TableBackend` — opt-in; on-demand refresh (default) + cadence/staleness-threshold mode; derived via `reconstruct.build_mirror_view` (FR-005, R5, FM-1..2)
-- [ ] T014 [P] [US2] Add opt-in Delta (delta-rs) + Iceberg (pyiceberg) format paths in `TableBackend` (meta → table properties), guarded by the `[table]` extra (R4)
-- [ ] T015 [US2] Wire `FluxState(store=TableBackend(...))` + a `refresh_mirror()` surface in `fluxstate.py`
-- [ ] T016 [P] [US2] Tests `TESTS/test_table_backend.py`: `flux_events` append / idempotency / no-rewrite; `flux_mirror` on-demand + cadence; parity vs local
-- [ ] T017 [P] [US2] Test: constructing `TableBackend(format="delta")` without `[table]` raises an actionable `pip install "fluxstate[table]"` error
+- [x] T012 [US2] Implement `storage/table.py:TableBackend` — `flux_events` as a partitioned Parquet dataset (append = new part; `_flux_meta.json` companion via atomic PUT persisting the store descriptor; no rewrite) (FR-004, FR-006, R4, FE-1..4, M-1..3)
+- [x] T013 [US2] Implement optional `flux_mirror` in `TableBackend` — opt-in; on-demand refresh (default) + cadence/staleness-threshold mode; derived via `reconstruct.build_mirror_view` (FR-005, R5, FM-1..2)
+- [x] T014 [P] [US2] Add opt-in Delta (delta-rs) + Iceberg (pyiceberg) format paths in `TableBackend` (meta → table properties), guarded by the `[table]` extra (R4)
+- [x] T015 [US2] Wire `FluxState(store=TableBackend(...))` + a `refresh_mirror()` surface in `fluxstate.py`
+- [x] T016 [P] [US2] Tests `TESTS/test_table_backend.py`: `flux_events` append / idempotency / no-rewrite; `flux_mirror` on-demand + cadence; parity vs local
+- [x] T017 [P] [US2] Test: constructing `TableBackend(format="delta")` without `[table]` raises an actionable `pip install "fluxstate[table]"` error
 
 **Checkpoint**: tabular storage works end-to-end (owner's core preference).
 

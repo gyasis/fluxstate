@@ -55,7 +55,7 @@ def convert_to_string(value):
 
 class FluxState:
     def __init__(self, table, key_column=None, mode="init", expect_serialized=False,
-                 store_path=None, backend=None):
+                 store_path=None, backend=None, store=None):
         self.table = table
         self.key_column = key_column or self.table.columns[0]
         self.validator = MirrorTableValidator()
@@ -68,11 +68,18 @@ class FluxState:
         # Bind the append-only change-log store. `store_path` is an additive keyword
         # (back-compat: existing positional/keyword calls are unaffected). Defaults to
         # `fluxstate.flux/` in the cwd so the pathless quickstart usage works.
-        # `backend` is an additive optional keyword (feature 003, T007) that forwards
-        # a `StorageBackend` implementation through to `ChangeLogStore`; it has no
-        # effect yet (no backend implementation exists in this wave) and defaults to
+        # `backend`/`store` are additive optional keywords (feature 003, T007/T015)
+        # forwarding a `StorageBackend` implementation (e.g. `TableBackend`) through
+        # to `ChangeLogStore`. `store=` is the quickstart-documented name
+        # (`FluxState(df, key_column, store=TableBackend(...))`); `backend=` is kept
+        # as a working alias (T007). NOTE: `self.store` below is — and always was —
+        # the bound `ChangeLogStore` instance, NOT this constructor's `store=`
+        # keyword; the two share a name but not a type. Passing neither defaults to
         # local-filesystem behavior identical to today (G3).
-        self.store = ChangeLogStore(store_path or "fluxstate.flux", backend=backend)
+        if backend is not None and store is not None and backend is not store:
+            raise ValueError("FluxState: pass only one of `backend=`/`store=`, not both")
+        resolved_backend = backend if backend is not None else store
+        self.store = ChangeLogStore(store_path or "fluxstate.flux", backend=resolved_backend)
 
         # Cast all columns except the key column to string
         self.table = self.table.with_columns([
@@ -231,6 +238,17 @@ class FluxState:
         return self.store.capture(
             self._source_table, self.key_column, captured_at=captured_at
         )
+
+    def refresh_mirror(self, at=None):
+        """Materialize/refresh the backend's optional ``flux_mirror`` (T015, FM-1/FM-2).
+
+        Delegates to the bound backend's ``refresh_mirror`` (e.g.
+        ``storage.table.TableBackend``). A no-op on backends that don't support
+        a mirror (``capabilities.supports_mirror`` is False) — each backend's
+        own ``refresh_mirror`` already handles that case (SB-8), so no
+        capability check is needed here.
+        """
+        return self.store.backend.refresh_mirror(at=at)
 
     # --- reconstruction primitives re-exported as thin methods (U2 / T019) --- #
     def as_of(self, entity_id, field, T):

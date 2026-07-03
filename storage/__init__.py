@@ -20,6 +20,7 @@ from typing import Optional
 
 from .base import Capabilities, EventRef, Meta, MirrorPolicy, StorageBackend
 from .local_folder import LocalFolderStore
+from .table import TableBackend
 
 __all__ = [
     "StorageBackend",
@@ -29,8 +30,9 @@ __all__ = [
     "EventRef",
     "select_backend",
     "LocalFolderStore",
-    # populated as backends land (T012/T018):
-    # "ObjectStoreBackend", "TableBackend",
+    "TableBackend",
+    # populated as backends land (T018):
+    # "ObjectStoreBackend",
 ]
 
 
