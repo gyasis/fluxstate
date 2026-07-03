@@ -86,11 +86,11 @@ parity tests.
 **Goal**: A scheduled Databricks Job captures a view's deltas into a Delta `flux_events` (+ optional `flux_mirror`), entirely on Databricks.
 **Independent test**: Run the sidecar capture template against a keyed view twice unchanged; rows added on run 1, none on run 2 (idempotent); reconstruction matches the view snapshots.
 
-- [ ] T021 [US4] Implement `sidecars/databricks/__init__.py:DeltaBackend` (a `TableBackend` bound to Delta `flux_events` + optional `flux_mirror`; store descriptor → Delta table properties), depending ONLY on the `[databricks]` extra (FR-008, FR-006, G8/SB-7)
-- [ ] T022 [US4] Implement `sidecars/databricks/job_template.py` — scheduled-Job capture: `spark.table(view).toArrow()` → Polars → capture → append; optional `applyInPandas` path (R8)
-- [ ] T023 [P] [US4] Test: assert the CORE import graph pulls NO databricks/delta module (base install has zero platform dep) (SC-004, G8)
-- [ ] T024 [P] [US4] Test the sidecar capture idempotency / no-op-on-unchanged against a local Delta table (deltalake) standing in for Spark; **assert storage grows proportional to changed cells (an unchanged re-capture appends ~0; a 3-changed-cell capture appends ~3 event rows)** (SC-005)
-- [ ] T025 [US4] Update `docs/DATABRICKS.md` — flip the sidecar section from PLANNED → shipped `DeltaBackend` usage
+- [x] T021 [US4] Implement `sidecars/databricks/__init__.py:DeltaBackend` (a `TableBackend` bound to Delta `flux_events` + optional `flux_mirror`; store descriptor → Delta table properties), depending ONLY on the `[databricks]` extra (FR-008, FR-006, G8/SB-7)
+- [x] T022 [US4] Implement `sidecars/databricks/job_template.py` — scheduled-Job capture: `spark.table(view).toArrow()` → Polars → capture → append; optional `applyInPandas` path (R8)
+- [x] T023 [P] [US4] Test: assert the CORE import graph pulls NO databricks/delta module (base install has zero platform dep) (SC-004, G8)
+- [x] T024 [P] [US4] Test the sidecar capture idempotency / no-op-on-unchanged against a local Delta table (deltalake) standing in for Spark; **assert storage grows proportional to changed cells (an unchanged re-capture appends ~0; a 3-changed-cell capture appends ~3 event rows)** (SC-005)
+- [x] T025 [US4] Update `docs/DATABRICKS.md` — flip the sidecar section from PLANNED → shipped `DeltaBackend` usage
 
 **Checkpoint**: first platform sidecar proven; adding a platform = adding a sidecar (FR-015).
 
