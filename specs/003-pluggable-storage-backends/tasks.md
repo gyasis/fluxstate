@@ -101,8 +101,8 @@ parity tests.
 **Goal**: Same history answers regardless of backend.
 **Independent test**: Run the parity suite over one seeded change-log persisted through each backend; all identical.
 
-- [ ] T026 [US5] Implement `TESTS/test_storage_parity.py` — reconstruct `as_of` / `timeline` / `row_state` / `mirror` over the SAME seeded change-log through Local / Object / Table backends; assert byte-identical, **including explicit type-fidelity round-trip (values restored to their original dtypes), `__deleted__` lifecycle, and UTC timestamps across every backend** (FR-010, FR-011, SC-003)
-- [ ] T027 [P] [US5] Extend the parity suite over the 002 `schema_churn` fixture (add / drop / rename) across all backends (R9)
+- [x] T026 [US5] Implement `TESTS/test_storage_parity.py` — reconstruct `as_of` / `timeline` / `row_state` / `mirror` over the SAME seeded change-log through Local / Object / Table backends; assert byte-identical, **including explicit type-fidelity round-trip (values restored to their original dtypes), `__deleted__` lifecycle, and UTC timestamps across every backend** (FR-010, FR-011, SC-003)
+- [x] T027 [P] [US5] Extend the parity suite over the 002 `schema_churn` fixture (add / drop / rename) across all backends (R9)
 
 **Checkpoint**: pluggable storage is trustworthy — parity is the merge gate.
 
