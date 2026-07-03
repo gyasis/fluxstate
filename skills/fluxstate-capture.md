@@ -56,6 +56,8 @@ flux info <store.flux>            # schema, key, #events, ts range
 - **Faithful recorder:** a format/precision/timezone change IS a change (`1.1`→`1.10` is logged).
 - **Type fidelity:** values are stored as canonical text + a `dtype` tag; reads re-cast to the
   original type — don't pre-stringify your input.
-- **Storage:** writes to a local path today. To land in Databricks, capture locally then upload the
-  immutable `events/*.parquet` to a UC Volume / object store (copy-new-files-only), or point
-  `store_path` at a mounted Volume/DBFS path. See `AGENTS.md` → Storage targets.
+- **Storage backend (pluggable):** capture writes through the selected backend — local folder
+  (default), an object store (`store_path="s3://…"`, `[remote]`), a first-class table
+  (`store=TableBackend(...)`, `[table]`), or Databricks (`store=DeltaBackend(...)`, `[databricks]`).
+  Capture is idempotent + atomic on every backend. Pick one with **`fluxstate-storage`**; deep
+  reference `AGENTS.md` → Storage backends.

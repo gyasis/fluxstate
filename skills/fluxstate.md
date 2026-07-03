@@ -1,6 +1,6 @@
 ---
 name: fluxstate
-description: Overview + router for FluxState, the cell-level CDC / temporal-versioning library for tabular data (a `.flux/` store = manifest.json + immutable delta Parquet). Use when the user says "fluxstate", "track changes over time", "cell-level history", "time-travel a table", "audit trail for this data", "diff two versions of a dataset", "what changed between these snapshots", or wants versioned/temporal storage of a keyed table. Routes to fluxstate-capture (write), fluxstate-timetravel (read/reconstruct), or fluxstate-compare (A/B + viewer).
+description: Overview + router for FluxState, the cell-level CDC / temporal-versioning library for tabular data (a `.flux/` store = manifest.json + immutable delta Parquet). Use when the user says "fluxstate", "track changes over time", "cell-level history", "time-travel a table", "audit trail for this data", "diff two versions of a dataset", "what changed between these snapshots", "store the change-log in a table / on s3 / in Databricks", or wants versioned/temporal storage of a keyed table. Routes to fluxstate-capture (write), fluxstate-timetravel (read/reconstruct), fluxstate-compare (A/B + viewer), or fluxstate-storage (pick a backend: local/object-store/table/Databricks).
 ---
 
 # FluxState — overview & router
@@ -27,6 +27,7 @@ whose newest event is a `__deleted__` marker, pivot field→column, cast per `dt
 | Ingest snapshots / build or append a store | **`fluxstate-capture`** |
 | Read history — as-of state, per-cell timeline, row lifecycle, store info | **`fluxstate-timetravel`** |
 | Compare two versions (A/B) or open the interactive viewer | **`fluxstate-compare`** |
+| Choose/use a **storage backend** (local · object store · table · Databricks) | **`fluxstate-storage`** |
 
 ## Setup (once per repo/machine)
 
@@ -42,5 +43,9 @@ uv run flux --help
 - **Idempotent:** re-capturing identical data is a no-op (content-derived `snapshot_id`).
 - **Lossless + typed:** values re-cast from stored text via the `dtype` tag.
 - **No lock-in:** `SELECT * FROM '<name>.flux/events/*.parquet'` in DuckDB / Polars, no FluxState code.
-- **Storage:** local FS today; for Databricks land the folder in a UC Volume / object store and
-  glob-read the Parquet, or sink the events into a Delta table (see `AGENTS.md` → Storage targets).
+- **Pluggable storage backends** (platform-agnostic, G8): **local folder** (default) · **object store**
+  (`s3`/`abfss`/`gcs`/UC Volume, `[remote]`) · a **first-class table** (`flux_events` + optional
+  `flux_mirror`; Parquet default, Delta/Iceberg opt-in, `[table]`) · **Databricks** `DeltaBackend`
+  (`[databricks]`). Select by `store_path` URI inference or pass `store=<backend>`. Reconstruction is
+  **byte-identical across every backend**. Core stays Polars+PyArrow; platform libs are opt-in extras.
+  → **`fluxstate-storage`** (details) and `AGENTS.md`.
