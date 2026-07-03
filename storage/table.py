@@ -19,17 +19,16 @@ Three physical formats, selected via ``format=``:
   ``_append_events`` that ``ChangeLogStore.capture`` delegates to directly).
 - ``"delta"`` / ``"iceberg"`` (opt-in, ``[table]`` extra) — ``flux_events``
   lands in a real Delta/Iceberg table via ``deltalake``/``pyiceberg``,
-  lazy-imported so the core install never pulls them in (G1/G8). This is a
-  MINIMAL path: the store descriptor is still kept in the same
-  ``_flux_meta.json`` JSON sidecar (a pragmatic simplification over "table
-  properties" for a wave with no Delta/Iceberg installed to validate against)
-  and the clean ``StorageBackend`` protocol methods
-  (``read_meta``/``write_meta``/``read_current_state``/``read_events``/
-  ``append_events``/``refresh_mirror``) are fully wired, but the RAW
-  ``list_events``/``_append_events`` helpers (and therefore
-  ``ChangeLogStore.capture()``/``FluxState.update_mirror_table()``) are
-  ``format="parquet"``-only in this wave — call ``append_events``/
-  ``read_events`` directly for Delta/Iceberg.
+  lazy-imported so the core install never pulls them in (G1/G8). The store
+  descriptor stays in the same ``_flux_meta.json`` JSON sidecar. The clean
+  ``StorageBackend`` protocol methods are fully wired for both. Engine capture
+  (``ChangeLogStore.capture``/``FluxState.update_mirror_table``): **Parquet and
+  Iceberg** are supported directly here (an Iceberg table's data files are plain
+  Parquet, so ``list_events``/``_append_events`` diff the table's data-file set
+  before/after ``append`` — validated by a parity test vs local). **Delta**
+  engine-capture is provided by the Databricks sidecar
+  (``sidecars.databricks.DeltaBackend``), which overrides the same helpers; or
+  call ``append_events``/``read_events`` directly for Delta.
 """
 
 from __future__ import annotations
@@ -276,14 +275,13 @@ class TableBackend:
         }
 
     # ------------------------------------------------------------------ #
-    # list_events (RAW; capture()-facing) — parquet-only (see module doc) #
+    # list_events (RAW; capture()-facing) — parquet + iceberg (delta via sidecar) #
     # ------------------------------------------------------------------ #
     def list_events(self, as_of: Optional[datetime] = None, window=None) -> list[Path]:
-        if self.format != "parquet":
+        if self.format == "delta":
             raise NotImplementedError(
-                f"TableBackend(format={self.format!r}).list_events() is not supported "
-                "in this wave — the raw ChangeLogStore.capture() path is parquet-only. "
-                "Use format='parquet' for FluxState(store=TableBackend(...)), or drive "
+                "TableBackend(format='delta') capture is provided by the Databricks "
+                "sidecar — use `from sidecars.databricks import DeltaBackend`. Or drive "
                 "this backend directly via append_events()/read_events()."
             )
         manifest = self.read_manifest()
@@ -304,11 +302,15 @@ class TableBackend:
                 continue
             if hi is not None and ts_min > hi:
                 continue
-            kept.append(self.events_path / entry["file"])
+            # parquet: one part path in `file`; iceberg: the data-file paths in `files`
+            # (absolute) that its `_append_events` recorded per commit.
+            for rel in (entry.get("files") or [entry["file"]]):
+                p = Path(rel)
+                kept.append(p if p.is_absolute() else self.events_path / rel)
         return kept
 
     # ------------------------------------------------------------------ #
-    # _append_events (RAW; capture()-facing) — parquet-only               #
+    # _append_events (RAW; capture()-facing) — parquet + iceberg           #
     # ------------------------------------------------------------------ #
     def _append_events(
         self,
@@ -325,17 +327,19 @@ class TableBackend:
         relies on for a single atomic write per capture), minus the nested
         ``events/`` subdirectory — parts land directly under ``events_path``.
         """
-        if self.format != "parquet":
+        if self.format == "delta":
             raise NotImplementedError(
-                f"TableBackend(format={self.format!r}) does not support "
-                "ChangeLogStore.capture()/FluxState.update_mirror_table() in this "
-                "wave; use format='parquet', or call append_events()/read_events() "
-                "directly (StorageBackend protocol)."
+                "TableBackend(format='delta') capture is provided by the Databricks "
+                "sidecar — use `from sidecars.databricks import DeltaBackend`, or call "
+                "append_events()/read_events() directly (StorageBackend protocol)."
             )
         if events.is_empty():
             raise ValueError("_append_events called with no events")
 
-        entry = self._append_events_data_parquet(events, snapshot_id, stamp=stamp)
+        if self.format == "iceberg":
+            entry = self._append_events_capture_iceberg(events, snapshot_id)
+        else:
+            entry = self._append_events_data_parquet(events, snapshot_id, stamp=stamp)
 
         manifest = self.read_manifest()
         manifest["key_column"] = key_column
@@ -492,6 +496,39 @@ class TableBackend:
         ts_max = events["timestamp"].max()
         return {
             "file": "<iceberg-table>",
+            "snapshot_id": snapshot_id,
+            "ts_min": to_utc(ts_min).isoformat(),
+            "ts_max": to_utc(ts_max).isoformat(),
+            "row_count": events.height,
+        }
+
+    # ------------------------------------------------------------------ #
+    # Iceberg CAPTURE-facing support (engine capture() through the table) #
+    # Same pattern as sidecars.databricks.DeltaBackend: an Iceberg table's #
+    # committed data files ARE plain Parquet, so we diff the data-file set #
+    # before/after `table.append()` and record the new files, which        #
+    # `list_events` then hands to the shared `pl.read_parquet` recon path.  #
+    # ------------------------------------------------------------------ #
+    def _iceberg_current_files(self) -> set[str]:
+        catalog = self._iceberg_catalog()
+        identifier = self._iceberg_identifier()
+        if not catalog.table_exists(identifier):
+            return set()
+        table = catalog.load_table(identifier)
+        files = [r["file_path"] for r in table.inspect.data_files().to_pylist()]
+        # `file_path` is an absolute URI; strip a `file://` scheme so it's a plain
+        # local path usable by `pl.read_parquet` in `list_events`.
+        return {f[len("file://"):] if f.startswith("file://") else f for f in files}
+
+    def _append_events_capture_iceberg(self, events: pl.DataFrame, snapshot_id: str) -> dict:
+        before = self._iceberg_current_files()
+        self._append_events_data_iceberg(events, snapshot_id)  # appends to the Iceberg table
+        new_files = sorted(self._iceberg_current_files() - before)
+        ts_min = events["timestamp"].min()
+        ts_max = events["timestamp"].max()
+        return {
+            "file": "<iceberg-table>",
+            "files": new_files,
             "snapshot_id": snapshot_id,
             "ts_min": to_utc(ts_min).isoformat(),
             "ts_max": to_utc(ts_max).isoformat(),

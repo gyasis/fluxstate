@@ -97,10 +97,16 @@ class DeltaBackend(TableBackend):
         return DeltaTable(str(self.events_path))
 
     def _current_files(self) -> set[str]:
-        """Relative paths (table-root-relative) of every Parquet file backing the table."""
+        """Absolute paths of every Parquet data file backing the Delta table.
+
+        deltalake 1.x exposes `DeltaTable.file_uris()` (the older `.files()` was
+        removed). It returns absolute URIs; strip a `file://` scheme so each is a
+        plain local path usable by `pl.read_parquet` in `list_events`.
+        """
         if not (self.events_path / "_delta_log").exists():
             return set()
-        return set(self._delta_table().files())
+        uris = self._delta_table().file_uris()
+        return {u[len("file://"):] if u.startswith("file://") else u for u in uris}
 
     # ------------------------------------------------------------------ #
     # list_events (RAW; capture()/reconstruct-facing) — Delta override    #

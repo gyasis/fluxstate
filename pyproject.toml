@@ -25,7 +25,7 @@ dependencies = [
 remote = ["fsspec>=2024.6.0", "s3fs>=2024.6.0", "adlfs>=2024.4.0", "gcsfs>=2024.6.0"]
 # First-class table backend. The default Parquet-dataset path needs NEITHER of these;
 # they are only pulled when a user selects the Delta/Iceberg format (clarify Q1).
-table = ["deltalake>=0.18", "pyiceberg>=0.7"]
+table = ["deltalake>=0.18", "pyiceberg>=0.7", "sqlalchemy>=2.0"]  # sqlalchemy: pyiceberg SqlCatalog
 # Databricks sidecar (first platform sidecar).
 databricks = ["deltalake>=0.18", "databricks-sdk>=0.30"]
 
@@ -40,6 +40,11 @@ dev = [
     "duckdb>=1.0",
     "pytz",   # test-only: DuckDB needs it to read tz-aware timestamp parquet columns
     "faker",  # test/demo-only: seeded value source for scripts/demo_fixture.py (US7)
+    "fsspec>=2026.6.0",
+    "deltalake>=1.6.1",
+    "pyiceberg>=0.11.1",
+    "s3fs>=2026.6.0",
+    "sqlalchemy>=2.0.51",
 ]
 
 [build-system]

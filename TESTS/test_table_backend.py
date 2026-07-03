@@ -293,6 +293,30 @@ def test_iceberg_format_works_when_pyiceberg_available():
         TableBackend(events=f"{d}/flux_events", format="iceberg")
 
 
+def test_iceberg_engine_capture_matches_local(tmp_path):
+    """TableBackend(format='iceberg') supports FluxState.update_mirror_table() and
+    reconstructs identically to LocalFolderStore (limitation-2 fix)."""
+    pytest.importorskip("pyiceberg")
+    pytest.importorskip("sqlalchemy")
+    import datetime as dt
+
+    from fluxstate import FluxState
+
+    t1 = dt.datetime(2026, 6, 1, tzinfo=dt.timezone.utc)
+    t2 = dt.datetime(2026, 6, 2, tzinfo=dt.timezone.utc)
+    ib = TableBackend(events=str(tmp_path / "ice"), format="iceberg")
+    local = str(tmp_path / "local.flux")
+    for kw in ({"store": ib}, {"store_path": local}):
+        FluxState(pl.DataFrame({"id": [1, 2, 3], "risk": [0.4, 0.7, 0.2]}),
+                  key_column="id", **kw).update_mirror_table(captured_at=t1)
+        FluxState(pl.DataFrame({"id": [1, 2], "risk": [0.4, 0.9]}),
+                  key_column="id", **kw).update_mirror_table(captured_at=t2)  # row 3 deleted
+    ice = FluxState(pl.DataFrame(), key_column="id", store=ib).save_mirror_table(output_format="polars").sort("id")
+    loc = FluxState(pl.DataFrame(), key_column="id", store_path=local).save_mirror_table(output_format="polars").sort("id")
+    assert ice.height == 2  # row 3 deleted
+    assert ice.equals(loc)  # iceberg == local parity
+
+
 def test_unknown_format_raises_value_error(tmp_path):
     with pytest.raises(ValueError):
         TableBackend(events=str(tmp_path / "flux_events"), format="csv")
