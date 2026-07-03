@@ -294,7 +294,22 @@ class ChangeLogStore:
 
     # --- store read-back: current state (generalized by reconstruct T020) -- #
     def _read_all_events(self, as_of: Optional[datetime] = None) -> pl.DataFrame:
-        """Concatenate all manifest-valid event files (with file-skip pruning)."""
+        """All change events (for reconstruction).
+
+        For TABLE backends (Delta/Iceberg/Parquet-dataset) read via the backend's
+        LIVE table scan (`read_events`) rather than a capture-time file ledger:
+        table maintenance (Delta OPTIMIZE/VACUUM, Iceberg rewrite/expire) physically
+        replaces/removes the data files a static ledger references, which would raise
+        FileNotFoundError on reconstruction (audit H3). The live scan always reflects
+        the table's current files. Folder/object backends keep the file-skip-pruned
+        path (their event files are FluxState-owned and immutable).
+        """
+        caps = getattr(self.backend, "capabilities", None)
+        if caps is not None and getattr(caps, "is_table", False):
+            df = self.backend.read_events()
+            if df is None or df.is_empty():
+                return pl.DataFrame(schema=change_event_schema())
+            return df
         files = self.list_events(as_of=as_of)
         if not files:
             return pl.DataFrame(schema=change_event_schema())
@@ -585,11 +600,12 @@ class ChangeLogStore:
         new_cols = {c for c in df.columns if c != key_column}
         schema_changed = bool(manifest["events"]) and same_key and prior_cols != new_cols
 
-        # Idempotency anti-join at snapshot granularity: this exact snapshot is
-        # already committed → nothing to do (unless the column set drifted).
-        if not schema_changed and any(e["snapshot_id"] == snap for e in manifest["events"]):
-            return {"events_added": 0, "snapshot_id": snap, "noop": True}
-
+        # Idempotency is decided by the DIFF against the CURRENT state (the
+        # `events.is_empty()` no-op below), NOT by matching a snapshot_id anywhere
+        # in history. A content hash matching an OLD capture does NOT mean this
+        # capture is a no-op: e.g. an empty snapshot always hashes the same, so
+        # "delete everything" after an intervening insert must still emit deletes.
+        # (Audit F2: the prior anti-join silently dropped the 2nd such capture.)
         prev = self._materialize_current(df.schema, key_column)
         events = self._diff(prev, df, key_column, timestamp=captured_at, snap_id=snap)
 

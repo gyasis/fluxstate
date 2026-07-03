@@ -461,17 +461,24 @@ class TableBackend:
     # so the format works without an external Iceberg catalog service.    #
     # ------------------------------------------------------------------ #
     def _iceberg_catalog(self):
+        # Cache one SqlCatalog (one SQLAlchemy engine) per instance — building a
+        # fresh catalog on every call did a create_engine + DDL round-trip 3x per
+        # capture (audit H7), wasteful and a SQLite lock-contention risk.
+        cached = getattr(self, "_catalog", None)
+        if cached is not None:
+            return cached
         self._require_pyiceberg()
         from pyiceberg.catalog.sql import SqlCatalog
 
         self.events_path.mkdir(parents=True, exist_ok=True)
         catalog_db = self.events_path / "catalog.db"
         warehouse = self.events_path / "warehouse"
-        return SqlCatalog(
+        self._catalog = SqlCatalog(
             "fluxstate",
             uri=f"sqlite:///{catalog_db}",
             warehouse=f"file://{warehouse}",
         )
+        return self._catalog
 
     def _iceberg_identifier(self) -> str:
         return f"fluxstate.{self.events_path.stem or 'flux_events'}"

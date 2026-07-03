@@ -74,7 +74,9 @@ def select_backend(
                 "table:// locations require the TableBackend, which is not yet "
                 "available. Install it with: pip install \"fluxstate[table]\""
             ) from exc
-        return TableBackend(location)
+        # Strip the scheme so the path is usable (audit F1: `table://` was passed
+        # unstripped -> Path("table:/…") is relative). `table:///abs` -> `/abs`.
+        return TableBackend(location[len("table://"):])
 
     if scheme in ("s3", "abfss", "gs"):
         try:
