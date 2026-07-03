@@ -73,9 +73,9 @@ parity tests.
 **Goal**: Stores live on S3 / ADLS / GCS / UC Volume with capture+reconstruct identical to local.
 **Independent test**: Point a store at a remote URI, capture, and reconstruct from a fresh process reading only that location.
 
-- [ ] T018 [US3] Implement `storage/object_store.py:ObjectStoreBackend` (fsspec) — immutable event object PUTs + **atomic single-object manifest/meta PUT** persisting the store descriptor (never rename) (FR-003, FR-006, R3, SB-4, M-2)
-- [ ] T019 [US3] Resolve `s3://` / `abfss://` / `gs://` in `select_backend` → `ObjectStoreBackend`, guarded by the `[remote]` extra
-- [ ] T020 [P] [US3] Tests `TESTS/test_object_store.py`: capture+reconstruct over the fsspec memory/local FS; atomic-meta + no-rewrite; cross-process read; parity vs local
+- [x] T018 [US3] Implement `storage/object_store.py:ObjectStoreBackend` (fsspec) — immutable event object PUTs + **atomic single-object manifest/meta PUT** persisting the store descriptor (never rename) (FR-003, FR-006, R3, SB-4, M-2)
+- [x] T019 [US3] Resolve `s3://` / `abfss://` / `gs://` in `select_backend` → `ObjectStoreBackend`, guarded by the `[remote]` extra
+- [x] T020 [P] [US3] Tests `TESTS/test_object_store.py`: capture+reconstruct over the fsspec memory/local FS; atomic-meta + no-rewrite; cross-process read; parity vs local
 
 **Checkpoint**: universal remote storage without a per-platform sidecar.
 
