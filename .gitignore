@@ -93,3 +93,9 @@ deep_research.db
 .devkid/
 .dk/
 execution_plan.json
+
+# Agent runtime churn: .git/hooks/post-commit APPENDS to this on every commit, so a
+# tracked copy leaves the working tree dirty immediately after each commit, forever.
+# It is a local activity log, not a deliverable — same policy as the other agent
+# runtime dot-files noted above.
+.claude/activity_stream.md
